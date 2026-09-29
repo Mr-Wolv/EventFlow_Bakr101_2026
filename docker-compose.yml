@@ -1,0 +1,94 @@
+name: eventflow
+
+services:
+  # Kafka 4.x in KRaft mode — no ZooKeeper. Single controller+broker combined node.
+  kafka:
+    image: apache/kafka:4.0.0
+    container_name: eventflow-kafka
+    ports:
+      # Host loopback only — the services reach Kafka over the compose network;
+      # exposing the plaintext broker on all interfaces is never wanted locally.
+      - "127.0.0.1:9092:9092"
+    environment:
+      # Node identities (KRaft)
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      # Listeners: INTERNAL for the docker network, EXTERNAL for the host
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093,EXTERNAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      # Single-node defaults
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      CLUSTER_ID: 4L6g3nShT-eMCtK--X86sw
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+      start_period: 15s
+
+  # Creates the orders topic explicitly (replication factor 1, 1 partition) instead
+  # of relying on broker auto-create — the same thing Strimzi's KafkaTopic CR does on K8s.
+  kafka-init:
+    image: apache/kafka:4.0.0
+    container_name: eventflow-kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - >
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --create --if-not-exists
+        --topic "$${KAFKA_TOPIC}" --partitions 1 --replication-factor 1 &&
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --list
+    environment:
+      KAFKA_TOPIC: ${KAFKA_TOPIC:-orders}
+
+  order-service:
+    build:
+      context: .
+      dockerfile: order-service/Dockerfile
+    container_name: eventflow-order
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+    ports:
+      # Loopback-only: fulfillment's /__admin endpoints are deliberately unauthenticated
+      # (demo scope) and must not be reachable from the LAN.
+      - "127.0.0.1:8080:8080"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_TOPIC: ${KAFKA_TOPIC:-orders}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  fulfillment-service:
+    build:
+      context: .
+      dockerfile: fulfillment-service/Dockerfile
+    container_name: eventflow-fulfillment
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+    ports:
+      # Loopback-only: /__admin failure-injection is deliberately unauthenticated (demo scope).
+      - "127.0.0.1:8081:8081"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_TOPIC: ${KAFKA_TOPIC:-orders}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8081/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s

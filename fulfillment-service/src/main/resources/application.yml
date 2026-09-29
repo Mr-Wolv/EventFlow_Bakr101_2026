@@ -1,0 +1,33 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: fulfillment-service
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: fulfillment
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        # Type headers are intentionally absent (producer disabled them); each service
+        # binds the payload to its own event class:
+        spring.json.use.type.headers: false
+        spring.json.value.default.type: com.eventflow.fulfillment.OrderCreatedEvent
+        spring.json.trusted.packages: com.eventflow.fulfillment
+
+eventflow:
+  topics:
+    orders: ${KAFKA_TOPIC:orders}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true

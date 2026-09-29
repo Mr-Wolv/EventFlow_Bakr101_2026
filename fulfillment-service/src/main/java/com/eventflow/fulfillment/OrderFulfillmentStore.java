@@ -1,0 +1,31 @@
+package com.eventflow.fulfillment;
+
+import org.springframework.stereotype.Component;
+
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
+/** In-memory order fulfillment state. PENDING until an OrderCreated event is processed. */
+@Component
+public class OrderFulfillmentStore {
+
+    private final Map<UUID, OrderStatus> states = new ConcurrentHashMap<>();
+
+    public void markFulfilled(UUID orderId) {
+        states.put(orderId, OrderStatus.FULFILLED);
+    }
+
+    /** A request for an unknown order is PENDING — it may still be in flight from Kafka. */
+    public OrderStatus getStatus(UUID orderId) {
+        return states.getOrDefault(orderId, OrderStatus.PENDING);
+    }
+
+    public Map<UUID, OrderStatus> all() {
+        return Map.copyOf(states);
+    }
+
+    public long fulfilledCount() {
+        return states.values().stream().filter(s -> s == OrderStatus.FULFILLED).count();
+    }
+}

@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fulfillment-service
+  namespace: eventflow
+  labels:
+    app: fulfillment-service
+    app.kubernetes.io/part-of: eventflow
+spec:
+  # 2+ replicas: partitions of the orders topic are distributed across group members.
+  # With the demo's single-partition topic only one replica consumes; scale the topic
+  # partitions to scale out processing. Safe anyway — processing is idempotent.
+  replicas: 2
+  selector:
+    matchLabels:
+      app: fulfillment-service
+  template:
+    metadata:
+      labels:
+        app: fulfillment-service
+    spec:
+      containers:
+        - name: fulfillment-service
+          # Built locally: docker build -t eventflow/fulfillment-service:latest -f fulfillment-service/Dockerfile .
+          image: eventflow/fulfillment-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8081
+              name: http
+          envFrom:
+            - configMapRef:
+                name: eventflow-config
+          resources:
+            requests:
+              cpu: 200m
+              memory: 384Mi
+            limits:
+              cpu: "1"
+              memory: 768Mi
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 12
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 6

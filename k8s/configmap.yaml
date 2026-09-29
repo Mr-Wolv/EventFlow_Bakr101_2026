@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: eventflow-config
+  namespace: eventflow
+  labels:
+    app.kubernetes.io/part-of: eventflow
+data:
+  # Kafka bootstrap reachable from inside the cluster.
+  # Default: Strimzi single-node cluster from docs/kubernetes.md (verified working).
+  # For a host-side Kafka (docker compose) instead, use "host.docker.internal:9092".
+  KAFKA_BOOTSTRAP_SERVERS: "my-cluster-kafka-bootstrap.kafka.svc.cluster.local:9092"
+  KAFKA_TOPIC: "orders"
+  LOGGING_LEVEL_ROOT: "INFO"

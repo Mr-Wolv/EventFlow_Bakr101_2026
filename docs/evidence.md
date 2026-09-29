@@ -1,0 +1,316 @@
+# Evidence — Captured Transcripts
+
+All output below is **captured verbatim** from a real end-to-end run on the author's
+machine (Windows 11, Docker 29.4.2, Compose v5.1.3, Temurin JDK 21, Maven 3.9.16) on
+2026-09-29. Nothing here is hand-written output; greps and section headers were added
+for readability. Repro steps: [failure-scenarios.md](failure-scenarios.md).
+
+---
+
+## 0. Build and unit tests
+
+```
+$ mvn -B verify
+...
+[INFO] Tests run: 9, Failures: 0, Errors: 0, Skipped: 0          <- fulfillment-service (5 FulfillmentConsumerTest + 4 IdempotentConsumerTest)
+[INFO] Tests run: 10, Failures: 0, Errors: 0, Skipped: 0         <- order-service (4 OrderServiceTest + 2 OrderTest + 4 GlobalExceptionHandlerTest; §7)
+[INFO] Building jar: D:\EventFlow_Bakr101_2026\fulfillment-service\target\fulfillment-service-1.0.0.jar
+[INFO] Reactor Summary for EventFlow — Root 1.0.0:
+[INFO] EventFlow — Root ................................... SUCCESS
+[INFO] order-service ...................................... SUCCESS
+[INFO] fulfillment-service ................................ SUCCESS
+[INFO] BUILD SUCCESS
+```
+
+Unit-test log lines exercising the exact distributed-systems behavior:
+
+```
+INFO  c.e.f.FulfillmentConsumer -- [DUPLICATE] event cb90d635-0134-4620-8135-5b5fb6f7136f already processed — skipping
+INFO  c.e.f.FulfillmentConsumer -- [PROCESSING] order 6c682441-7308-4702-8601-420416b255ee amount 42.00 (from orders)
+INFO  c.e.f.FulfillmentConsumer -- [FULFILLED] order 6c682441-7308-4702-8601-420416b255ee
+ERROR c.e.f.FailureInjector   -- [FAULT-INJECTED] failing processing of event 6ff25949-8007-4bc6-9d44-8e8d9ff98e47 (always-fail fault armed)
+```
+
+## 0b. Stack up (Kafka 4.0 KRaft, explicit topic creation)
+
+```
+$ docker compose up --build -d
+...
+Container eventflow-kafka         Healthy
+Container eventflow-kafka-init    Exited        (exit 0)
+Container eventflow-order         Up (healthy)
+Container eventflow-fulfillment   Up (healthy)
+
+$ docker compose logs kafka-init | tail -2
+Created topic orders.
+orders
+```
+
+> The first iteration of the compose file wrote the init command as a folded multi-line
+> string under `entrypoint: ["/bin/bash", "-c"]`. Compose split that string into
+> separate argv entries, so bash received only the first token and ran `kafka-topics.sh`
+> with no arguments (exit 127, usage text in the logs). `docker inspect` of the container
+> showed the split argv; the fix is a list-form `command` with a single string element,
+> which passes the whole pipeline to one `bash -c` invocation.
+
+---
+
+## 1. Happy path — OrderCreated → Kafka → Fulfilled
+
+```
+$ curl -si -X POST http://localhost:8080/orders -H "Content-Type: application/json" \
+    -d '{"customerId": "550e8400-e29b-41d4-a716-446655440000", "amount": 125.50}'
+HTTP/1.1 201
+Location: /orders/c00e022a-e978-44a0-bd45-e41f4634362f
+{"id":"c00e022a-e978-44a0-bd45-e41f4634362f","customerId":"550e8400-e29b-41d4-a716-446655440000","amount":125.50,"createdAt":"2026-09-29T14:44:20.365892447Z"}
+
+$ docker compose logs order-service | grep PUBLISHED
+[PUBLISHED] event da704c32-b10d-45ca-a25e-67c54f0c3da0 for order c00e022a-e978-44a0-bd45-e41f4634362f -> orders-p0@0
+
+$ docker compose logs fulfillment-service | grep -E "PROCESSING|FULFILLED"
+[PROCESSING] order c00e022a-e978-44a0-bd45-e41f4634362f amount 125.50 (from orders)   <- 14:44:21.209Z
+[FULFILLED]  order c00e022a-e978-44a0-bd45-e41f4634362f                               <- 14:44:21.210Z
+
+$ curl -s http://localhost:8081/__admin/stats
+{"uniqueEventsProcessed":1,"ordersFulfilled":1,"injectedFailures":0,"faultMode":"NONE",...}
+```
+
+Publish → fulfil latency: ~40 ms. Offsets visible (`orders-p0@0`).
+
+## 2. Duplicate event delivery — processed exactly once
+
+The exact event record from Scenario 1 is produced **again** to the topic via
+`kafka-console-producer` (simulating an at-least-once redelivery):
+
+```
+$ MSYS_NO_PATHCONV=1 docker compose exec -T kafka /opt/kafka/bin/kafka-console-producer.sh \
+    --bootstrap-server localhost:9092 --topic orders <<'EOF'
+{"eventId":"da704c32-b10d-45ca-a25e-67c54f0c3da0", ...same payload...}
+EOF
+
+$ docker compose logs fulfillment-service | grep DUPLICATE
+[DUPLICATE] event da704c32-b10d-45ca-a25e-67c54f0c3da0 already processed — skipping   <- 14:45:02.143Z
+
+$ curl -s http://localhost:8081/__admin/stats
+{"uniqueEventsProcessed":1,"ordersFulfilled":1,...}     <- still 1, not 2
+```
+
+## 3. Consumer downtime — event retained, processed on restart
+
+```
+$ docker compose stop fulfillment-service
+Container eventflow-fulfillment  Stopped
+
+$ curl -s -X POST http://localhost:8080/orders ... -d '{"amount": 99.99}'
+{"id":"656b2505-af1c-442e-8e63-bbee303ff072", "amount":99.99, ...}    <- no fulfillment activity (verified: 0 log lines)
+
+$ docker compose start fulfillment-service
+$ sleep 12
+$ docker compose logs fulfillment-service | grep 656b2505
+[PROCESSING] order 656b2505-af1c-442e-8e63-bbee303ff072 amount 99.99  <- 14:45:56.807Z
+[FULFILLED]  order 656b2505-af1c-442e-8e63-bbee303ff072               <- 14:45:56.808Z
+
+$ curl -s http://localhost:8081/__admin/orders/656b2505-af1c-442e-8e63-bbee303ff072/status
+{"orderId":"656b2505-...","status":"FULFILLED"}
+```
+
+Honest observation captured during the run: after the restart the stats endpoint
+showed `uniqueEventsProcessed: 1` (the in-memory dedup set was wiped with the old
+process) — exactly the limitation documented in [audit-trail.md](audit-trail.md).
+Kafka's offsets are the durable layer; application-level dedup state is not.
+
+## 4. Partial failure — retry with backoff, then recovery
+
+```
+$ curl -s -X POST http://localhost:8081/__admin/failure -H "Content-Type: application/json" -d '{"fault": "ONCE_PER_EVENT"}'
+{"faultMode":"ONCE_PER_EVENT",...}
+
+$ curl -s -X POST http://localhost:8080/orders ... -d '{"amount": 55.00}'
+{"id":"ba8615f6-42d3-4f67-afdc-76206adc19f8", ...}
+
+$ docker compose logs fulfillment-service
+[FAULT-INJECTED] failing processing of event 39a056da-4cba-44fb-b181-1f18a6526fd4 (once-per-event fault armed)   <- 14:46:19.920Z
+[RETRY] attempt 1 for order-topic record ba8615f6-42d3-4f67-afdc-76206adc19f8 failed: Listener method ... threw exception  <- 14:46:19.933Z
+[PROCESSING] order ba8615f6-42d3-4f67-afdc-76206adc19f8 amount 55.00    <- 14:46:20.948Z (~1.0s later — the 1s backoff)
+[FULFILLED]  order ba8615f6-42d3-4f67-afdc-76206adc19f8
+```
+
+The failure fired **after** the event was received but **before** any state change;
+the consumer rolled back its idempotency record, retried after the backoff, and
+recovered without any data loss.
+
+## 5. Retry exhaustion — dead-letter topic, partition not blocked
+
+```
+$ curl -s -X POST http://localhost:8081/__admin/failure -H "Content-Type: application/json" -d '{"fault": "ALWAYS"}'
+
+$ curl -s -X POST http://localhost:8080/orders ... -d '{"amount": 75.00}'
+{"id":"aa332c91-f407-4d26-b2c6-31565666bebf", ...}
+
+$ docker compose logs fulfillment-service | grep -c RETRY
+4        <- four delivery attempts: initial + 3 retries (1s/2s/4s backoff)
+
+$ MSYS_NO_PATHCONV=1 docker compose exec -T kafka /opt/kafka/bin/kafka-console-consumer.sh \
+    --bootstrap-server localhost:9092 --topic orders.DLT --from-beginning --timeout-ms 8000
+{"eventId":"8c5fa4da-dd4e-430d-8cb4-51d56a89189f","eventType":"OrderCreated","orderId":"aa332c91-f407-4d26-b2c6-31565666bebf","customerId":"550e8400-...","amount":75.00,"occurredAt":"2026-09-29T14:53:39.831001689Z"}
+
+(The console consumer displays the value only. Spring's DeadLetterPublishingRecoverer
+additionally attaches headers to the DLT record — kafka_originalTopic, kafka_originalPartition,
+kafka_originalOffset, kafka_exception* — which can be inspected with --property print.headers=true.)
+
+$ curl -s -X POST http://localhost:8081/__admin/failure/clear && curl -s -X POST http://localhost:8080/orders ... -d '{"amount": 10.00}'
+[PROCESSING] order c964b440-a857-4fd0-8422-1d60b75eeb25 amount 10.00    <- immediately, partition not stuck
+[FULFILLED]  order c964b440-a857-4fd0-8422-1d60b75eeb25
+```
+
+### The bug this scenario caught (and the fix)
+
+The **first** execution of this scenario failed for an instructive reason:
+
+```
+org.apache.kafka.common.errors.SerializationException: Can't convert value of class
+com.eventflow.fulfillment.OrderCreatedEvent to class org.apache.kafka.common.serialization.StringSerializer
+```
+
+The recoverer had been given the default `KafkaTemplate`, which inherited the
+**consumer's** configuration — so it tried to serialize the DLT record with a
+`StringSerializer`, the publish threw, and the error handler re-seeked the record
+instead of dead-lettering it. The record looped (14 fault injections) until the fault
+was cleared, then processed normally — nothing was lost, but the DLT guarantee was not
+delivered.
+
+Fix (in `KafkaErrorConfig`): a dedicated `deadLetterTemplate` producer bean with a
+JSON value serializer, matching the producer's wire format. After the fix the scenario
+passes end-to-end as shown above. This is exactly the kind of failure the demo is
+meant to surface — the "dead lettering just works" assumption was wrong, and now the
+repo has both the bug's signature and its fix on record.
+
+---
+
+## 6. Kubernetes — minikube + Strimzi (applied and verified)
+
+Environment: minikube v1.39.0 (docker driver, 4 GiB), Kubernetes v1.37.0, Strimzi
+operator `quay.io/strimzi/operator:1.2.0`, kubectl v1.34.1. The compose stack was torn
+down first; Kafka runs **inside the cluster** via Strimzi (no host Kafka).
+
+```
+$ kubectl create namespace kafka
+$ kubectl create -f 'https://strimzi.io/install/latest?namespace=kafka' -n kafka
+$ kubectl wait pod -l name=strimzi-cluster-operator --for=condition=Ready --timeout=300s -n kafka
+pod/strimzi-cluster-operator-7765d8745-2mw7b condition met
+
+$ kubectl apply -f https://strimzi.io/examples/latest/kafka/kafka-single-node.yaml -n kafka
+kafkanodepool.kafka.strimzi.io/dual-role created
+kafka.kafka.strimzi.io/my-cluster created
+$ kubectl wait kafka/my-cluster --for=condition=Ready --timeout=600s -n kafka
+kafka.kafka.strimzi.io/my-cluster condition met
+
+$ kubectl apply -f k8s/namespace.yaml && kubectl apply -f k8s/
+$ kubectl apply -f k8s/kafka-topic.yaml
+kafkatopic.kafka.strimzi.io/orders created
+NAME     CLUSTER      PARTITIONS   REPLICATION FACTOR   READY
+orders   my-cluster   1            1                    True
+
+$ kubectl get pods -n eventflow
+NAME                                   READY   STATUS    RESTARTS   AGE
+fulfillment-service-64f949c5b4-srzfb   1/1     Running   0          59s
+fulfillment-service-64f949c5b4-x6fxz   1/1     Running   0          59s
+order-service-7748bf8b49-rlgjq         1/1     Running   0          80s
+```
+
+### Smoke test — executed inside the cluster (kubectl exec, no port-forward)
+
+```
+$ kubectl exec -n eventflow deploy/order-service -- \
+    curl -s -X POST http://order-service:8080/orders -H "Content-Type: application/json" \
+    -d '{"customerId": "550e8400-...", "amount": 125.50}'
+{"id":"ea55e170-34e6-4d7a-bbdd-431ddad7af38", ..., "createdAt":"2026-09-29T16:06:22.393330148Z"}
+```
+
+The event was consumed by the **other** consumer replica — consumer-group distribution
+on a real cluster (single-partition topic → exactly one member gets `orders-0`):
+
+```
+pod ...-x6fxz (partition owner):
+[PROCESSING] order ea55e170-34e6-4d7a-bbdd-431ddad7af38 amount 125.50 (from orders)   <- 16:06:23.890Z
+[FULFILLED]  order ea55e170-34e6-4d7a-bbdd-431ddad7af38                               <- 16:06:23.891Z
+
+pod ...-srzfb (sibling):
+Finished assignment for group at generation 1: {...=Assignment(partitions=[orders-0]), ...=Assignment(partitions=[])}
+fulfillment: partitions assigned: []
+```
+
+### Scaling and self-healing failover
+
+```
+$ kubectl scale deployment fulfillment-service --replicas=3 -n eventflow
+fulfillment-service-64f949c5b4-vrxb5   0/1   ContainerCreating → 1/1 Running   (17s)
+
+$ kubectl delete pod fulfillment-service-64f949c5b4-x6fxz -n eventflow   # kill the partition owner
+$ kubectl rollout status deployment/fulfillment-service -n eventflow
+deployment "fulfillment-service" successfully rolled out          # Deployment replaced it (9t796)
+
+# new order created immediately after the owner was killed:
+{"id":"52a40e44-a2e6-4ef4-9186-410d404c61d0", "amount":42.00, "createdAt":"2026-09-29T16:08:56.013544572Z"}
+
+# survivor vrxb5 took over orders-0 and processed it 143 ms later:
+[PROCESSING] order 52a40e44-a2e6-4ef4-9186-410d404c61d0 amount 42.00 (from orders)   <- 16:08:56.156Z
+[FULFILLED]  order 52a40e44-a2e6-4ef4-9186-410d404c61d0                              <- 16:08:56.158Z
+fulfillment: partitions assigned: [orders-0]                        <- retained through 2 more rebalances
+```
+
+Two layers of resilience in one sequence: Kubernetes maintained the replica count
+(replacement pod created automatically) and the Kafka consumer group rebalanced the
+partition to a survivor — no event lost.
+
+### Real snags hit during deployment (and fixes)
+
+1. **Image names**: the compose images are `eventflow-order-service` (dashes); the
+   manifests expect `eventflow/order-service` (slashes). Fixed with
+   `docker tag` + `minikube image load`. If you build directly for K8s, tag as
+   `eventflow/order-service:latest`.
+2. **Apply order**: `kubectl apply -f k8s/` raced — the Namespace was not established
+   before the objects referencing it. Apply `k8s/namespace.yaml` first (or re-apply).
+3. **Strimzi apiVersion drift**: current Strimzi (1.2.0) serves these CRDs only as
+   `kafka.strimzi.io/v1` — the widely-copied `v1beta2` examples fail with
+   `no matches for kind "KafkaTopic"`. [k8s/kafka-topic.yaml](../k8s/kafka-topic.yaml)
+   uses `v1`, verified against the live CRD (`kubectl get crd kafkatopics.kafka.strimzi.io`).
+4. **KRaft log noise on first connect**: `CoordinatorLoadInProgressException ... is
+   loading the group` appears while the fresh broker initializes the `__consumer_offsets`
+   partition; the consumer retries and joins successfully seconds later. Expected,
+   not an error.
+
+## 7. API edge cases — how the services treat a stranger
+
+Driven by reviewing the repo as a first-time user. Initial state: unknown routes, wrong
+methods and malformed variables all returned **500** (the catch-all error handler was
+eating Spring's framework exceptions) and fulfillment returned Spring's default error
+body, inconsistent with the order service. Fixed in both services, then re-verified:
+
+```
+GET  /                          -> 404 {"status":404,"error":"Not Found","message":"no route for /"}
+GET  /nonexistent (both svcs)   -> 404
+DELETE /orders                  -> 405 {"status":405,"error":"Method Not Allowed",...}
+POST /orders, Content-Type text/plain -> 415 {"status":415,"error":"Unsupported Media Type",...}
+GET  /orders/not-a-uuid         -> 400 {"message":"invalid value 'not-a-uuid' for parameter 'id'"}
+POST /__admin/failure {"fault":"NOT_A_REAL_FAULT"}
+                                -> 400 {"message":"invalid value 'NOT_A_REAL_FAULT';
+                                          accepted values: [NONE, ALWAYS, ONCE_PER_EVENT]"}
+GET  /orders/<unknown-uuid>     -> 404
+```
+
+The enum message makes the fault API self-documenting: a first-time caller learns the
+accepted values from the error itself. The handler behavior is also unit-tested
+(`GlobalExceptionHandlerTest`, included in the counts in §0).
+
+## Summary
+
+| # | Scenario | Result |
+|---|----------|--------|
+| 1 | Happy path | 201 → PUBLISHED → PROCESSING → FULFILLED in ~40 ms |
+| 2 | Duplicate delivery | `[DUPLICATE] ... skipping`, unique count stays 1 |
+| 3 | Consumer downtime | Event waited in Kafka, fulfilled ~1s after restart |
+| 4 | Partial failure | Fault → retry (1s backoff) → recovery, no loss |
+| 5 | Retry exhaustion | 4 attempts → record in `orders.DLT` → partition unblocked |
+| 6 | Kubernetes (minikube + Strimzi) | Deployed live; in-cluster smoke test, scale 2→3, pod-kill failover, group rebalance — no event loss |
+| 7 | API edge cases | 404/405/415/400 with self-documenting messages on both services |

@@ -1,5 +1,7 @@
 # EventFlow — Distributed Event-Driven Backend
 
+[![CI](https://github.com/Mr-Wolv/EventFlow_Bakr101_2026/actions/workflows/ci.yml/badge.svg)](https://github.com/Mr-Wolv/EventFlow_Bakr101_2026/actions/workflows/ci.yml)
+
 **Java 21 | Spring Boot | Apache Kafka | Docker | Kubernetes | GitHub Actions**
 
 Two independently deployable Spring Boot services communicating through asynchronous
@@ -24,7 +26,7 @@ This project makes a point of not claiming anything it cannot show. The honest s
 | Happy path, duplicate delivery, consumer downtime, retry + recovery, dead-letter topic | ✅ **Verified** — captured terminal transcripts in [docs/evidence.md](docs/evidence.md) |
 | Kubernetes on minikube + Strimzi Kafka | ✅ **Verified** — deployed to a live minikube cluster (Kubernetes v1.37) with **in-cluster Kafka via Strimzi**; in-cluster smoke test, replica scaling, pod-kill failover and consumer-group rebalance captured in [docs/evidence.md](docs/evidence.md) §6 |
 | AWS EC2 deployment | 📝 **Documented only** — creating an AWS account requires a payment method, which is not available for this project. Full workflow in [docs/aws-deployment.md](docs/aws-deployment.md) |
-| CI (GitHub Actions) | 📝 **Configured** — runs `mvn verify` + Docker builds on every push once this repo is on GitHub |
+| CI | ✅ **Verified** — green on every push: build + tests + Docker images, plus a kind job that deploys Strimzi Kafka and smoke-tests the full in-cluster flow ([Actions](https://github.com/Mr-Wolv/EventFlow_Bakr101_2026/actions)) |
 
 "Documented" is stated as such everywhere it applies; nothing in the docs pretends a
 cloud resource was provisioned.
@@ -204,10 +206,15 @@ for this project — no instance was ever launched, and the docs say so explicit
 
 ## CI
 
-[.github/workflows/ci.yml](.github/workflows/ci.yml) — JDK 21 (Temurin) with Maven
-caching, `mvn -B verify` (build + unit tests), then `docker compose build` for both
-service images. The run history appears in the Actions tab once the repository is on
-GitHub; no badge is shown here until there is a real run behind it.
+[.github/workflows/ci.yml](.github/workflows/ci.yml) — two jobs on every push:
+
+1. **Build, test, Docker images** — JDK 21 (Temurin) with Maven caching, `mvn -B verify`
+   (19 unit tests), then `docker compose build` for both service images.
+2. **Kubernetes (kind)** — builds the images, boots a kind cluster, deploys the Strimzi
+   operator + single-node Kafka, applies [`k8s/`](k8s/), then smoke-tests the real
+   in-cluster flow: `POST /orders` → consumed → `FULFILLED` (polls up to 60s, fails the
+   job otherwise). The same evidence as [docs/evidence.md](docs/evidence.md) §6,
+   re-proven on every commit.
 
 ---
 

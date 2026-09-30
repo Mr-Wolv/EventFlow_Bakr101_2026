@@ -6,7 +6,8 @@ target/
 # IDE
 .idea/
 *.iml
-.vscode/
+.vscode/*
+!.vscode/settings.json
 .settings/
 .classpath
 .project
@@ -18,6 +19,9 @@ Thumbs.db
 # Local env
 .env
 *.local.yml
+
+# Local tooling
+bin/
 
 # Agent workspace state
 .freebuff/

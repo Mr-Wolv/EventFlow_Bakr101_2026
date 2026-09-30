@@ -26,4 +26,18 @@
     <properties>
         <java.version>25</java.version>
     </properties>
+
+    <build>
+        <plugins>
+            <!-- Mockito/ByteBuddy attach their Java agent dynamically during tests;
+                 without this flag JDK 25 prints a 4-line WARNING block per test JVM. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <argLine>-XX:+EnableDynamicAgentLoading</argLine>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

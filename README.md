@@ -176,6 +176,12 @@ mvn -B verify
 rollback, retry recovery, asynchronous publish callbacks, error mapping, and Kafka
 error-handler configuration.
 
+**Toolchain:** the build targets Java 25 (`java.version=25` in the root [pom](pom.xml));
+compiling under an older JDK produces a wall of errors. On Windows with multiple JDKs,
+point `JAVA_HOME` at the JDK 25 install before running Maven. The committed
+[.vscode/settings.json](.vscode/settings.json) pins the VS Code Java language server to
+the same JDK so IDE analysis matches the build.
+
 ---
 
 ## Kubernetes

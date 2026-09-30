@@ -60,6 +60,11 @@ broker has no persistent volume, so recreating that broker also loses its log.
 
 ## Known gaps (intentional, with upgrade paths)
 
+> The AWS serverless variant (SQS → Lambda → DynamoDB, LocalStack-validated) enforces
+> the idempotency guarantee *durably* — the Lambda's conditional put
+> (`attribute_not_exists(eventId)`) survives restarts and spans invocations, unlike the
+> in-memory set below. Guarantee comparison: [aws-architecture.md](aws-architecture.md).
+
 1. Idempotency + fulfillment state are in-memory — see table above.
 2. No transactional outbox — the DB save and the publish are two steps; a crash between
    them loses the event (and the order is gone anyway in-memory). Fix: outbox pattern.

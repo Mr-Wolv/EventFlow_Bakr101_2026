@@ -28,6 +28,9 @@ jobs:
       - name: Build and test (multi-module Maven build)
         run: mvn -B verify
 
+      - name: Build and test the AWS Lambda module (coverage-gated)
+        run: mvn -B -f aws/lambda/pom.xml verify
+
       - name: Build Docker images (both services)
         run: docker compose build order-service fulfillment-service
 

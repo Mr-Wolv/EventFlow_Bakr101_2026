@@ -402,3 +402,27 @@ Docker metadata store went read-only when the C: drive filled (freed space, rest
 Docker); Lambdas need the host Docker socket mounted (`Docker not available` otherwise);
 a shaded jar must be deployed directly (double-zipping yields `ClassNotFoundException`);
 the license requires the current date-versioned image (pinned 4.x tags are rejected).
+
+## 12. Coverage enforcement gate (2026-09-30)
+
+Coverage stopped being a number in a report and became a build rule. JaCoCo
+`check` gates are wired into both builds and run in CI:
+
+| Build | Gate | Measured | Result |
+|---|---|---|---|
+| order-service (`mvn -B verify`) | ≥ 95% line (BUNDLE) | 95.88% | ✓ All coverage checks have been met |
+| fulfillment-service (`mvn -B verify`) | ≥ 95% line (BUNDLE) | 95.24% | ✓ All coverage checks have been met |
+| eventflow-aws-lambda (`mvn -f aws/lambda/pom.xml verify`) | ≥ 90% line (BUNDLE) | 72.15% at first wiring | ✗ **build failed by design** — Rule violated for bundle eventflow-aws-lambda |
+| eventflow-aws-lambda (after new tests) | ≥ 90% line (BUNDLE) | **100.00%** | ✓ All coverage checks have been met |
+
+The gate was verified the strong way: the first lambda run *failed the build* at 72.15%
+before the new tests brought it to 100%. The new tests are the first for the AWS path
+(12): conditional-put idempotency contract, duplicate suppression, S3 archive keying,
+poison-message rethrow (SQS redelivery), multi-record batches, and both constructor
+branches (standard AWS chain vs explicit LocalStack endpoint). One behavior was
+corrected against code truth while writing them: malformed JSON is *rethrown* for
+redelivery, not silently degraded — the test now pins the real contract.
+
+CI (`.github/workflows/ci.yml`) builds both stacks: the core reactor (`mvn -B verify`)
+and the standalone Lambda module (`mvn -f aws/lambda/pom.xml verify`), each with its
+gate active — a coverage regression anywhere now fails the build.

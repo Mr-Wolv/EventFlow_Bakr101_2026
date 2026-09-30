@@ -49,7 +49,7 @@ completely different, and production AWS wiring would add a dead-letter queue wi
 
 **Operational surface shrinks on the AWS path.** No brokers, no consumer-group
 rebalancing, no K8s manifests for the services — the "cluster" is AWS's problem.
-What appears instead is IaC: the entire data plane is described in ~150 lines of
+What appears instead is IaC: the entire data plane is described in ~220 lines of
 Terraform and is reproducible with `apply`/`destroy`.
 
 ## Mapping table
@@ -62,6 +62,7 @@ Terraform and is reproducible with `apply`/`destroy`.
 | "mark fulfilled" | `OrderFulfillmentStore.markFulfilled` (in-memory) | item attribute `status = FULFILLED_BY_LAMBDA` |
 | "dead-letter topic" | `orders.DLT` via `DeadLetterPublishingRecoverer` | (production: SQS DLQ via `maxReceiveCount` — documented, not deployed) |
 | "the demo archive" | log lines (`[FULFILLED] ...`) | S3 `s3://eventflow-order-archive/orders/<orderId>/<eventId>.json` |
+| "unit tests" | 45 across two Spring Boot modules (≥95% line gate) | 12 for the Lambda handler (≥90% line gate) |
 
 ## What is deliberately NOT claimed
 

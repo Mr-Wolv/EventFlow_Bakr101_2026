@@ -50,43 +50,72 @@ public class OrderCreatedHandler implements RequestHandler<SQSEvent, Void> {
     private final String table;
     private final String bucket;
 
+    /** Test seam: inject clients and names directly. */
+    OrderCreatedHandler(DynamoDbClient dynamodb, S3Client s3, String table, String bucket) {
+        this.dynamodb = dynamodb;
+        this.s3 = s3;
+        this.table = table;
+        this.bucket = bucket;
+    }
+
     public OrderCreatedHandler() {
         // LocalStack injects AWS_ENDPOINT_URL; when absent (real AWS) the default
         // credential/endpoint chain applies unchanged.
         String endpoint = System.getenv().getOrDefault("AWS_ENDPOINT_URL", "");
         String region = System.getenv().getOrDefault("AWS_REGION", "us-east-1");
-        if (endpoint.isEmpty()) {
-            this.dynamodb = DynamoDbClient.builder()
-                    .httpClient(UrlConnectionHttpClient.create())
-                    .region(Region.of(region))
-                    .build();
-            this.s3 = S3Client.builder()
-                    .httpClient(UrlConnectionHttpClient.create())
-                    .region(Region.of(region))
-                    .build();
-        } else {
-            StaticCredentialsProvider creds = StaticCredentialsProvider.create(
-                    AwsBasicCredentials.create(
-                            System.getenv().getOrDefault("AWS_ACCESS_KEY_ID", "test"),
-                            System.getenv().getOrDefault("AWS_SECRET_ACCESS_KEY", "test")));
-            this.dynamodb = DynamoDbClient.builder()
-                    .httpClient(UrlConnectionHttpClient.create())
-                    .region(Region.of(region))
-                    .endpointOverride(URI.create(endpoint))
-                    .credentialsProvider(creds)
-                    .build();
-            this.s3 = S3Client.builder()
-                    .httpClient(UrlConnectionHttpClient.create())
-                    .region(Region.of(region))
-                    .endpointOverride(URI.create(endpoint))
-                    .credentialsProvider(creds)
-                    .serviceConfiguration(S3Configuration.builder()
-                            .pathStyleAccessEnabled(true)
-                            .build())
-                    .build();
-        }
         this.table = System.getenv().getOrDefault("TABLE_NAME", "eventflow-orders");
         this.bucket = System.getenv().getOrDefault("ARCHIVE_BUCKET", "eventflow-order-archive");
+
+        OrderCreatedHandler h = endpoint.isEmpty()
+                ? standard(region)
+                : forEndpoint(endpoint, region);
+        this.dynamodb = h.dynamodb;
+        this.s3 = h.s3;
+    }
+
+    /** Real-AWS construction: default credential/endpoint chain, lazy credentials. */
+    static OrderCreatedHandler standard(String region) {
+        return new OrderCreatedHandler(
+                DynamoDbClient.builder()
+                        .httpClient(UrlConnectionHttpClient.create())
+                        .region(Region.of(region))
+                        .build(),
+                S3Client.builder()
+                        .httpClient(UrlConnectionHttpClient.create())
+                        .region(Region.of(region))
+                        .build(),
+                System.getenv().getOrDefault("TABLE_NAME", "eventflow-orders"),
+                System.getenv().getOrDefault("ARCHIVE_BUCKET", "eventflow-order-archive"));
+    }
+
+    /**
+     * LocalStack-style construction: explicit endpoint, static test credentials,
+     * path-style S3. The three env vars are what the LocalStack platform injects
+     * into the function; on real AWS this factory is simply never used.
+     */
+    static OrderCreatedHandler forEndpoint(String endpoint, String region) {
+        StaticCredentialsProvider creds = StaticCredentialsProvider.create(
+                AwsBasicCredentials.create(
+                        System.getenv().getOrDefault("AWS_ACCESS_KEY_ID", "test"),
+                        System.getenv().getOrDefault("AWS_SECRET_ACCESS_KEY", "test")));
+        return new OrderCreatedHandler(
+                DynamoDbClient.builder()
+                        .httpClient(UrlConnectionHttpClient.create())
+                        .region(Region.of(region))
+                        .endpointOverride(URI.create(endpoint))
+                        .credentialsProvider(creds)
+                        .build(),
+                S3Client.builder()
+                        .httpClient(UrlConnectionHttpClient.create())
+                        .region(Region.of(region))
+                        .endpointOverride(URI.create(endpoint))
+                        .credentialsProvider(creds)
+                        .serviceConfiguration(S3Configuration.builder()
+                                .pathStyleAccessEnabled(true)
+                                .build())
+                        .build(),
+                System.getenv().getOrDefault("TABLE_NAME", "eventflow-orders"),
+                System.getenv().getOrDefault("ARCHIVE_BUCKET", "eventflow-order-archive"));
     }
 
     @Override

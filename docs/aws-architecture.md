@@ -21,7 +21,7 @@ they differ, and why each design makes its tradeoffs.
 | Failure handling | `DefaultErrorHandler`: 3 retries (1s/2s/4s) → `orders.DLT`, partition continues | Message returns to queue on error → retry with redelivery; poison messages need a DLQ in production |
 | Ordering | Per-order (records keyed by `orderId`) | None on a standard queue (FIFO queues exist, with throughput tradeoffs) |
 | Deployment unit | Docker images → kind/minikube, Strimzi Kafka | Terraform-managed S3/DynamoDB/SQS/IAM/Lambda |
-| Verified with | `mvn verify` (45 tests), CI kind job with in-cluster smoke test | `aws/validate.sh` against LocalStack (with `ENFORCE_IAM=1`) |
+| Verified with | `mvn verify` (50 tests, 100%-line gate), CI kind job with in-cluster smoke test | `aws/validate.sh` against LocalStack (`ENFORCE_IAM=1`), CI aws-localstack job (terraform apply + validate.sh + duplicate-proof), 12 gated Lambda tests |
 
 ## Why the guarantees differ — and why that's the interesting part
 

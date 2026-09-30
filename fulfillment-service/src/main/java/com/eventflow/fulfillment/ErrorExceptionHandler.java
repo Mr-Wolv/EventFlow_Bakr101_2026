@@ -1,6 +1,10 @@
 package com.eventflow.fulfillment;
 
-import com.fasterxml.jackson.databind.exc.InvalidFormatException;
+import java.time.Instant;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -12,15 +16,12 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
-import java.time.Instant;
-import java.util.Arrays;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 
 /**
- * Error responses matching the order service's shape ({status, error, message, timestamp}).
- * For invalid enum input (e.g. the fault endpoint) the message lists the accepted values,
- * so the API documents itself on a bad request.
+ * Error responses matching the order service's shape ({status, error, message,
+ * timestamp}). For invalid enum input (e.g. the fault endpoint) the message
+ * lists the accepted values, so the API documents itself on a bad request.
  */
 @RestControllerAdvice
 public class ErrorExceptionHandler {
@@ -39,13 +40,17 @@ public class ErrorExceptionHandler {
         return badRequest(message);
     }
 
-    /** Unknown routes (and GET /) are 404, not the catch-all 500. */
+    /**
+     * Unknown routes (and GET /) are 404, not the catch-all 500.
+     */
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<Map<String, Object>> handleNoResource(NoResourceFoundException ex) {
         return notFound(ex.getResourcePath() == null ? "no such route" : "no route for /" + ex.getResourcePath());
     }
 
-    /** A wrong HTTP method on an existing route is 405, not a 500. */
+    /**
+     * A wrong HTTP method on an existing route is 405, not a 500.
+     */
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     public ResponseEntity<Map<String, Object>> handleMethod(HttpRequestMethodNotSupportedException ex) {
         Map<String, Object> body = new LinkedHashMap<>();

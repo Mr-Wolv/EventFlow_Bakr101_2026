@@ -318,7 +318,7 @@ for i in range(len(RECTS)):
             VIOLATIONS.append(f"rect∩rect: {RECTS[i][4]} vs {RECTS[j][4]}")
 
 # ---------------- save ----------------
-img = img.resize((W, H), Image.LANCZOS)
+img = img.resize((W, H), Image.LANCZOS) # type: ignore
 img.save(OUT, "PNG", optimize=True)
 
 if VIOLATIONS:

@@ -22,7 +22,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-/** Edge-case handler behavior: client mistakes must never surface as 500s. */
+/**
+ * Edge-case handler behavior: client mistakes must never surface as 500s.
+ */
 class GlobalExceptionHandlerTest {
 
     private final GlobalExceptionHandler handler = new GlobalExceptionHandler();
@@ -30,8 +32,8 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("unknown routes map to 404, not 500")
     void unknownRouteIs404() {
-        ResponseEntity<Map<String, Object>> response =
-                handler.handleNoResource(new NoResourceFoundException(null, "nonexistent"));
+        ResponseEntity<Map<String, Object>> response
+                = handler.handleNoResource(new NoResourceFoundException(null, "nonexistent"));
 
         assertThat(response.getStatusCode().value()).isEqualTo(404);
         assertThat(response.getBody()).containsEntry("error", "Not Found");

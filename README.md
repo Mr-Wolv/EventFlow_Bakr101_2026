@@ -23,7 +23,7 @@ This project makes a point of not claiming anything it cannot show. The honest s
 |---|---|
 | Build + 45 unit tests | ✅ **Verified** — Java 25 `mvn -B verify`; [docs/evidence.md](docs/evidence.md) preserves the earlier Java 21 / 19-test transcript |
 | Docker Compose stack (Kafka 4.0 KRaft + topic init + both services) | ✅ **Java 25 smoke-tested** — all containers healthy; order reached `FULFILLED`; both APIs returned `415` for unsupported media types. Details in [docs/evidence.md](docs/evidence.md) §8 |
-| Duplicate delivery, consumer downtime, retry + recovery, dead-letter topic | 🕰 **Historically verified** — Java 21 transcripts in [docs/evidence.md](docs/evidence.md) §§2–5; these fault scenarios were not rerun after the Java 25 upgrade |
+| Duplicate delivery, consumer downtime, retry + recovery, dead-letter topic | 🕰 **Verified live on Java 21; unit-verified on Java 25** — the end-to-end transcripts in [docs/evidence.md](docs/evidence.md) §§2–5 were captured on the Java 21 compose stack and have not been re-run end-to-end on Java 25; on Java 25 the same paths are covered by the 45-test suite (dedup, rollback + retry, exhaustion → DLT, async publish, error mapping) and by the happy-path runs in §8/§9 |
 | Kubernetes on minikube + Strimzi Kafka | ✅ **Verified — Java 21 live run + Java 25 CI kind job** — deployed on 2026-09-29 (Minikube v1.39.0, in-cluster Strimzi Kafka) with scale-up, pod-kill failover and rebalance; on Java 25, CI deploys to kind and runs an in-cluster smoke test on every push. Transcripts: [docs/evidence.md](docs/evidence.md) §6, §9 |
 | AWS EC2 deployment | 📝 **Documented only** — creating an AWS account requires a payment method, which is not available for this project. Full workflow in [docs/aws-deployment.md](docs/aws-deployment.md) |
 | CI | **Verified** — pushes and PRs targeting `main` run Maven verification, image builds, and a kind/Strimzi smoke test that deploys Java 25 images and fulfills a real order in-cluster. Current run status is shown by the [Actions page](https://github.com/Mr-Wolv/EventFlow_Bakr101_2026/actions) and the badge above. |
@@ -37,9 +37,10 @@ cloud resource was provisioned.
 
 ![EventFlow architecture](architecture/architecture.png)
 
-*The current Java 25 service topology: both services in `eventflow`, Kafka via Strimzi in
-`kafka`, and process-local state. The live Kubernetes verification shown in the diagram
-is historical (Java 21, 2026-09-29). Source: [`architecture/generate.py`](architecture/generate.py).*
+*The service topology: both services in `eventflow`, Kafka via Strimzi in `kafka`, and
+process-local state. Toolchain and runtime versions shown in the diagram are from the
+Java 21 live verification (2026-09-29); CI now builds and smoke-tests Java 25 images on
+kind on every push (§9). Source: [`architecture/generate.py`](architecture/generate.py).*
 
 Event published to the `orders` topic (keyed by `orderId` for per-order ordering):
 

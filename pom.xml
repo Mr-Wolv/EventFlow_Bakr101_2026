@@ -25,6 +25,9 @@
 
     <properties>
         <java.version>25</java.version>
+        <!-- Default surefire JVM args; JaCoCo's prepare-agent overrides this property
+             when coverage is requested, and @{argLine} picks it up here. -->
+        <argLine>-XX:+EnableDynamicAgentLoading</argLine>
     </properties>
 
     <build>
@@ -35,7 +38,7 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
-                    <argLine>-XX:+EnableDynamicAgentLoading</argLine>
+                    <argLine>@{argLine} -XX:+EnableDynamicAgentLoading</argLine>
                 </configuration>
             </plugin>
         </plugins>

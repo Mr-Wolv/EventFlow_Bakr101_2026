@@ -322,7 +322,10 @@ accepted values from the error itself. The handler behavior is also unit-tested
 ## 8. Java 25 Compose smoke check (2026-09-30)
 
 This is a current-runtime validation summary, separate from the verbatim Java 21
-transcripts above.
+transcripts above. JaCoCo coverage was reproduced on 2026-09-30 during the
+consistency audit (§10) with
+`mvn org.jacoco:jacoco-maven-plugin:0.8.15:prepare-agent test org.jacoco:jacoco-maven-plugin:0.8.15:report`
+— the figures below match the reproduction.
 
 | Check | Result |
 |---|---|
@@ -353,3 +356,25 @@ of the smoke test succeeded; transcript of the failure:
 A side effect worth keeping: these two kind-job runs also verify the Java 25 images
 deployed against in-cluster Strimzi Kafka — the previously unverified Kubernetes
 deployment on the current runtime (see README status table).
+
+## 10. Documentation ↔ code consistency audit (2026-09-30)
+
+Every doc claim in the repository was checked against the code and configuration, and
+every code behavior was checked against the docs. Method: read every source file,
+manifest, and doc; mechanically re-run every runnable claim. Result: all load-bearing
+claims verified accurate; three precision drifts found and corrected (see the commits
+referenced from this section):
+
+| Claim | Check performed | Result |
+|---|---|---|
+| Validation boundary `amount ≥ 0.01`, `customerId` UUID (`@NotNull`) | Read `OrderRequest` annotations + `GlobalExceptionHandler` mapping; matched against README/audit-trail wording | ✓ consistent |
+| Error semantics 400/404/405/415/500 on both services | Read both `@RestControllerAdvice` classes: 415 and the enum self-documenting message are custom handlers, not Spring defaults; unit tests cover each case | ✓ consistent |
+| Retry profile (3 retries after initial delivery, 1s/2s/4s), DLT `orders.DLT`, offset committed after DLT | Read `KafkaErrorConfig` (`ExponentialBackOff(1000, 2.0)`, `DefaultErrorHandler` + `DeadLetterPublishingRecoverer`) + `FulfillmentConsumer` rollback via `forget()` | ✓ consistent |
+| §8 coverage figures | Re-ran `jacoco:prepare-agent test report` on JDK 25 | ✓ 95.88% / 95.24% / 95.49% combined — reproduces to the digit |
+| Ports, loopback bindings, topic init, healthchecks, resource requests, probes, replicas | Read `docker-compose.yml`, both Dockerfiles, all 7 `k8s/` manifests; compared against README + kubernetes.md tables | ✓ consistent |
+| MIT license | LICENSE present at repo root, MIT text | ✓ consistent |
+| "45 unit tests" | Local `mvn verify` on JDK 25 and CI both count 45 (20 order + 25 fulfillment) | ✓ consistent |
+| Fault scenarios §§2–5 as "Java 21 transcripts" | Cross-checked §8 and §9: both explicitly Java-25 runs | ✓ labeled accurately (README wording tightened in this audit) |
+| Diagram caption vs diagram contents | Caption said "current Java 25 topology" while the diagram shows Java 21-era versions; regeneration verified byte-identical (280696 bytes, 0 diff) | ✗ fixed — caption now labels the versions honestly |
+| §9 evidence vs surefire `argLine` | §9's fix blocked JaCoCo's agent injection; coverage could not reproduce until `@{argLine}` late-binding was restored | ✗ fixed — root `pom.xml` uses `<argLine>` property + `@{argLine}` |
+| README status-table wording for fault scenarios (§§2–5) | §8/§9 are Java 25 runs while §§2–5 transcripts are Java 21; the table's "Historically verified" label could read as stale/underclaimed | ✗ fixed — row now states exactly which runtime each evidence set covers |

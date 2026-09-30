@@ -2,7 +2,12 @@
 """
 Generates architecture/architecture.png — the EventFlow system diagram.
 
-Design contract (v4, senior pass):
+Design contract (v5, dual-path):
+* v5 — adds the AWS serverless variant band (SQS → Lambda → DynamoDB + S3),
+  updates all runtime/verification stamps to current truth (Java 25 CI, gates,
+  62 tests), and re-labels the honest-limitations footer. The primary
+  Kafka/Kubernetes canvas is unchanged from v4.
+* v4, senior pass:
 * HARMONIC GRID — one spacing scale (M=48 outer, G=40 gutters, 24px inner pad),
   three shared column edges used by BOTH content rows, equal card heights per row.
 * BUS LANE — all three flow labels sit on ONE baseline in the dedicated lane
@@ -25,7 +30,7 @@ HERE = Path(__file__).resolve().parent
 OUT = HERE / "architecture.png"
 
 SS = 2                      # supersample
-W, H = 1560, 1000
+W, H = 1560, 1300
 
 # ---------------- spacing scale ----------------
 M      = 48     # outer margin
@@ -41,6 +46,7 @@ CARD, BORDER = "#121926", "#243044"
 TXT, SOFT = "#E7ECF5", "#B9C2D4"
 MUTED, FAINT = "#8A94A8", "#5E6980"
 BLUE, GREEN, AMBER, RED, INDIGO = "#5B9CFF", "#43D08A", "#F0A63C", "#F26D78", "#7C87E8"
+AWS_C = "#5BC8D5"           # AWS variant path (distinct from all primary hues)
 
 VIOLATIONS = []
 TEXTS  = []   # (x1,y1,x2,y2, label)
@@ -167,16 +173,16 @@ def flow_pill(cx, cy, s, color, size=12):
 # HEADER
 # ============================================================
 text((M, 38), "EventFlow", 34, TXT, bold=True)
-text((M, 88), "Two Spring Boot services · asynchronous Kafka events · failure modes verified end-to-end", 15, MUTED)
+text((M, 88), "Two Spring Boot services · Kafka + Kubernetes primary · AWS serverless variant · every claim evidence-backed", 15, MUTED)
 
 px = M
-for p in ["Java 25", "Spring Boot 3.5.16", "Apache Kafka 4.x (KRaft)", "Docker", "Kubernetes", "GitHub Actions"]:
+for p in ["Java 25", "Spring Boot 3.5.16", "Kafka 4.x · KRaft", "Docker", "Kubernetes", "Terraform", "LocalStack", "GitHub Actions"]:
     w = measure(p, 12) + 26
     d.rounded_rectangle([_S(px), _S(118), _S(px + w), _S(146)], radius=14 * SS, outline=BORDER, width=SS)
     text((px + w / 2, 132), p, 12, "#C6CFDF", anchor="mm")
     px += w + 10
 
-vb = "verified live — docs/evidence.md"
+vb = "CI-verified · 62 tests · 100% line coverage — docs/evidence.md"
 vw = measure(vb, 12) + 34
 d.rounded_rectangle([_S(1512 - vw), _S(118), _S(1512), _S(146)], radius=14 * SS, outline=GREEN, width=SS)
 d.ellipse([_S(1512 - vw + 14), _S(128), _S(1512 - vw + 20), _S(134)], fill=GREEN)
@@ -187,17 +193,17 @@ text((1512 - vw + 28, 132), vb, 12, GREEN, anchor="lm")
 # ============================================================
 K8S = (M, 184, 1512, 828)
 d.rounded_rectangle([_S(v) for v in K8S], radius=18 * SS, outline=INDIGO, width=SS)
-tracked((80, 198), "kubernetes cluster · minikube v1.39.0", 11, INDIGO, K8S, 2.4)
-tracked((1466, 198), "last live K8s run · Java 21 · 2026-09-29", 11, FAINT, K8S, 1.8, anchor_right=True)
+tracked((80, 198), "kubernetes · minikube (live run) · kind (ci)", 11, INDIGO, K8S, 2.4)
+tracked((1466, 198), "deployments verified · java 21 live · java 25 in ci", 11, FAINT, K8S, 1.8, anchor_right=True)
 
 # ---------- namespace kafka (224..372) ----------
 KNS = (72, 224, 1488, 372)
 d.rounded_rectangle([_S(v) for v in KNS], radius=14 * SS, outline=AMBER, width=SS)
 tracked((94, 237), "namespace · kafka", 11, AMBER, KNS, 2.4)
-tracked((1466, 237), "strimzi operator 1.2.0", 11, FAINT, KNS, 1.8, anchor_right=True)
+tracked((1466, 237), "strimzi · v1 crds · operator 1.2.0 (minikube) / latest (ci)", 11, FAINT, KNS, 1.8, anchor_right=True)
 
 for x1, x2, title, l1, l2, stripe in [
-    (COL1[0], COL1[1], "Apache Kafka 4.3.1", "single node · KRaft mode — no ZooKeeper",
+    (COL1[0], COL1[1], "Apache Kafka 4.x", "single node · KRaft — no ZooKeeper · Strimzi-managed",
      "my-cluster-kafka-bootstrap.kafka.svc:9092", AMBER),
     (COL2[0], COL2[1], "topic · orders", "1 partition · RF 1 · retention 7d",
      "key = orderId → per-order ordering", AMBER),
@@ -270,22 +276,62 @@ text((72, 908), "POST /orders · GET /orders/{id}", 13, MUTED, box=(M, 864, 400,
 polyline([(224, 864), (224, 716)], "#AEB8CC")   # lands on the Order Service card edge
 text((242, 800), "HTTP", 12, MUTED)
 
-card((440, 864, 1512, 936))
-tracked((464, 877), "run it", 11, MUTED, (440, 864, 1512, 936), 2.4)
-text((464, 902), "docker compose up -d --build", 12, SOFT, box=(440, 864, 1512, 936))
-text((464, 922), "curl -X POST localhost:8080/orders -d '{…}'", 12, SOFT, box=(440, 864, 1512, 936))
-text((960, 902), "kubectl apply -f k8s/namespace.yaml && kubectl apply -f k8s/", 12, SOFT, box=(440, 864, 1512, 936))
-text((960, 922), "kubectl scale deploy fulfillment-service --replicas=3 -n eventflow", 12, SOFT, box=(440, 864, 1512, 936))
+card((440, 864, 1060, 936))
+tracked((464, 877), "run it · compose + kubernetes", 11, MUTED, (440, 864, 1060, 936), 2.4)
+text((464, 902), "docker compose up -d --build", 12, SOFT, box=(440, 864, 1060, 936))
+text((464, 922), "curl -X POST localhost:8080/orders -d '{…}'", 12, SOFT, box=(440, 864, 1060, 936))
+text((760, 902), "kubectl apply -f k8s/namespace.yaml", 12, SOFT, box=(440, 864, 1060, 936))
+text((760, 922), "kubectl apply -f k8s/   # then scale", 12, SOFT, box=(440, 864, 1060, 936))
+
+card((1096, 864, 1512, 936))
+tracked((1120, 877), "run it · aws path", 11, MUTED, (1096, 864, 1512, 936), 2.4)
+text((1120, 902), "terraform apply (aws/terraform)", 12, SOFT, box=(1096, 864, 1512, 936))
+text((1120, 922), "FLAG_DUPLICATE=1 bash aws/validate.sh", 12, SOFT, box=(1096, 864, 1512, 936))
+
+# ============================================================
+# AWS VARIANT BAND (976..1236) — the serverless deployment path
+# ============================================================
+AWSB = (M, 976, 1512, 1236)
+d.rounded_rectangle([_S(v) for v in AWSB], radius=18 * SS, outline=AWS_C, width=SS)
+tracked((80, 990), "aws deployment path · serverless variant", 11, AWS_C, AWSB, 2.4)
+tracked((1466, 990), "terraform-managed · ci job runs it on every push", 11, FAINT, AWSB, 1.8, anchor_right=True)
+
+for x1, x2, title, l1, l2, stripe in [
+    (72, 412, "queue · eventflow-orders-queue", "sqs standard · at-least-once delivery",
+     "input to the fulfillment lambda", AWS_C),
+    (512, 852, "lambda · order-fulfillment", "java 21 runtime · sqs event-source mapping",
+     "errors rethrown → sqs redelivers", AWS_C),
+    (952, 1292, "dynamodb + s3", "attribute_not_exists(eventId) — durable dedup",
+     "archive: s3://eventflow-order-archive", AWS_C),
+]:
+    card((x1, 1016, x2, 1108), stripe=stripe)
+    text((x1 + PAD, 1032), title, 16, TXT, bold=True, box=(x1, 1016, x2, 1108))
+    text((x1 + PAD, 1062), l1, 13, MUTED, box=(x1, 1016, x2, 1108))
+    text((x1 + PAD, 1084), l2, 13, MUTED, box=(x1, 1016, x2, 1108))
+
+polyline([(412, 1062), (512, 1062)], AWS_C)
+flow_pill(462, 1040, "invoke", AWS_C, size=11)
+polyline([(852, 1062), (952, 1062)], AWS_C)
+flow_pill(902, 1040, "write", AWS_C, size=11)
+
+chip((1330, 1034, 1468, 1058), "ci-verified ✓", AWS_C, size=11)
+
+chip((72, 1132, 320, 1156), "terraform init · plan · apply", AWS_C, size=11)
+chip((340, 1132, 640, 1156), "validate.sh — send → assert → duplicate-proof", AWS_C, size=11)
+chip((660, 1132, 920, 1156), "destroy verified — force_destroy bucket", AWS_C, size=11)
+
+text((72, 1184), "idempotency is durable here — the event record itself is the dedup store, unlike the Kafka path's process-local set", 13, SOFT, box=(M, 1168, 1512, 1210))
+text((72, 1208), "ordering is weaker (standard queue) · no aws account exists — localstack emulates the apis; its token is not an aws credential", 12, FAINT, box=(M, 1192, 1512, 1230))
 
 # ============================================================
 # FOOTER
 # ============================================================
-text((M, 966), "▍", 13, AMBER, bold=True)
-text((66, 966),
+text((M, 1266), "▍", 13, AMBER, bold=True)
+text((66, 1266),
      "honest limitations — Kafka outage does not flip K8s probes · /__admin reads per-replica state · "
-    "app state lost on restart · broker data depends on storage · AWS: documented workflow only",
+    "app state lost on restart · compose ports bind loopback-only · sqs dlq documented, not deployed",
      11, FAINT)
-text((1512, 966), "generated by architecture/generate.py", 11, FAINT, anchor="ra")
+text((1512, 1266), "generated by architecture/generate.py · v5", 11, FAINT, anchor="ra")
 
 # ============================================================
 # MECHANICAL OVERLAP CHECKS

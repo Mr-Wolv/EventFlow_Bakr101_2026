@@ -38,10 +38,12 @@ cloud resource was provisioned.
 
 ![EventFlow architecture](architecture/architecture.png)
 
-*The service topology: both services in `eventflow`, Kafka via Strimzi in `kafka`, and
-process-local state. Toolchain and runtime versions shown in the diagram are from the
-Java 21 live verification (2026-09-29); CI now builds and smoke-tests Java 25 images on
-kind on every push (§9). Source: [`architecture/generate.py`](architecture/generate.py).*
+*The full system, both paths: the primary Kafka + Kubernetes topology (both services in
+`eventflow`, Kafka via Strimzi in `kafka`, process-local state, DLT flow) and the AWS
+serverless variant (SQS → Lambda → DynamoDB + S3, Terraform-managed, CI-verified on
+every push). Both flows' verification status is stamped on the diagram. Source:
+[`architecture/generate.py`](architecture/generate.py) — regenerate with
+`python architecture/generate.py`; the build fails on any text/line overlap.*
 
 Event published to the `orders` topic (keyed by `orderId` for per-order ordering):
 

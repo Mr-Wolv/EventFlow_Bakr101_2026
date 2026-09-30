@@ -449,3 +449,20 @@ CI was also extended to tell the whole repo's story: a fourth job
 `terraform apply` + `aws/validate.sh` with the duplicate-proof assertion, and destroys
 the stack on every push to main when `LOCALSTACK_AUTH_TOKEN` is configured. The token
 authenticates the LocalStack workspace only — no AWS account exists.
+
+## 14. Architecture diagram v5 — dual-path (2026-09-30)
+
+The committed diagram predated the AWS path and carried Java 21-era stamps; per the
+repo's convergence rule it was regenerated to reflect current truth before freeze.
+Mechanical checks from the generator (exit 1 on any overlap) plus pixel probes on the
+rendered PNG:
+
+| Check | Result |
+|---|---|
+| Generator overlap checks (text∩text, text∩line, rect∩rect) | ✓ passed — 84 texts, 10 segments, 14 rects, exit 0 |
+| Canvas | 1560×1300 (v4's Kafka/K8s canvas intact; new AWS band 976–1236) |
+| AWS band contents | SQS queue → Lambda (Java 21) → DynamoDB + S3 cards, invoke/write flows, terraform/validate/destroy chips, durable-idempotency note, no-AWS-account boundary line |
+| Stamps updated | K8s band: minikube live + kind CI; Strimzi v1 CRDs; header badge: CI-verified · 62 tests · 100% line coverage; footer limitations rewritten (AWS "documented only" claim removed as false) |
+| Flow lines pixel-probed (blue publish, green consume, red DLT, 2× AWS arrows) | ✓ all present in rendered PNG |
+| Determinism | re-render byte-identical (sha256 5ac8808549fbc50b…) |
+| README caption | updated to describe both paths and the regenerate command |

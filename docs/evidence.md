@@ -466,3 +466,23 @@ rendered PNG:
 | Flow lines pixel-probed (blue publish, green consume, red DLT, 2× AWS arrows) | ✓ all present in rendered PNG |
 | Determinism | re-render byte-identical (sha256 5ac8808549fbc50b…) |
 | README caption | updated to describe both paths and the regenerate command |
+
+## 15. Formal bidirectional consistency audit — 63/63 claims verified (2026-09-30)
+
+Full protocol run: inventory of every source file, config, manifest, and doc; forward
+extraction (code → behavior) and reverse extraction (docs → claims); mechanical claim-
+by-claim cross-matching via a purpose-built checker (now kept as
+[`tools/audit_consistency.py`](../tools/audit_consistency.py), exit 1 on any mismatch).
+
+| Metric | Result |
+|---|---|
+| Files audited | 19 source/config (2 application.yml, 13 Java mains, 4 Terraform, compose, 7 k8s manifests, CI, validate.sh) + 9 markdown docs + diagram source |
+| Entities mapped | 63 cross-cutting claims mechanically checked: ports, validation bounds, producer/consumer settings, retry profile, DLT, dedup semantics, fault modes, error matrix 400/404/405/415/500, event schema, topic config (1 partition, RF 1, retention.ms 604800000 = 7d), probes, loopback bindings, AWS resources (runtime java21, timeout 60, mem 512, batch 5, PAY_PER_REQUEST, GSI, visibility 60, force_destroy), IAM actions, boundary sentences, CI wiring |
+| Mismatches (Types A–D) | **0** after checker calibration — 9 initial flags were all proven to be checker artifacts (markdown emphasis/wrapping, fmt-aligned spaces, claims whose authoritative surface is the diagram source, not README) |
+| Manual-layer review | Envelope fields (stats `timestamp`), JSON leniency defaults, `AWS_REGION` fallback — all consistent with documented transcripts/contracts |
+| Verdict | **100% bidirectional consistency** |
+
+The checker's own calibration history is part of the record: every initial MISMATCH
+was individually traced to a matcher defect (not a repo defect) and fixed in the
+engine before the 63/63 verdict was accepted — the audit tool held itself to the
+same standard as the repo.

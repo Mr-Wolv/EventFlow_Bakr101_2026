@@ -286,6 +286,8 @@ EventFlow/
 │   ├── aws-architecture.md             # AWS variant vs Kafka path — guarantees compared
 │   ├── local-aws-validation.md         # LocalStack validation with captured output
 │   └── audit-trail.md                  # Processing contract walkthrough
+├── tools/
+│   └── audit_consistency.py          # Docs↔code claim checker (exit 1 on drift) — see evidence §15
 └── .github/workflows/ci.yml
 ```
 

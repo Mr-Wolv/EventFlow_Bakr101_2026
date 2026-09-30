@@ -95,10 +95,23 @@ jobs:
 
       - name: Smoke test — in-cluster order → fulfillment (poll up to 60s)
         run: |
-          kubectl exec -n eventflow deploy/order-service -- \
-            curl -s -X POST http://order-service:8080/orders \
-            -H "Content-Type: application/json" \
-            -d '{"customerId": "550e8400-e29b-41d4-a716-446655440000", "amount": 125.50}'
+          # The first request can race Service endpoint propagation in a
+          # fresh kind cluster (curl exit 7 = connection refused).
+          # Retry the POST instead of failing on the first attempt.
+          CREATED=0
+          for i in $(seq 1 12); do
+            if RESP=$(kubectl exec -n eventflow deploy/order-service -- \
+              curl -s -X POST http://order-service:8080/orders \
+              -H "Content-Type: application/json" \
+              -d '{"customerId": "550e8400-e29b-41d4-a716-446655440000", "amount": 125.50}'); then
+              echo "order created: $RESP"
+              CREATED=1
+              break
+            fi
+            echo "attempt $i: order-service not accepting requests yet, retrying in 5s"
+            sleep 5
+          done
+          [ "$CREATED" -eq 1 ] || { echo "smoke test failed: order-service unreachable"; exit 1; }
           LOGS=0
           for i in $(seq 1 12); do
             LOGS=$(kubectl logs -n eventflow -l app=fulfillment-service --prefix 2>/dev/null | grep -c FULFILLED || true)

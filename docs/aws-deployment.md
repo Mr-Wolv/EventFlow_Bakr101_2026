@@ -9,13 +9,14 @@
 
 ## Target architecture
 
-A single EC2 instance running the full Docker Compose stack — the deliberate
-"one box, one public endpoint" scope:
+A single EC2 instance running the full Docker Compose stack. Compose binds the service
+ports to loopback by default; access them through an SSH tunnel. Public port exposure
+is an optional, explicitly guarded change described below:
 
 ```
-Internet ──► EC2 (Docker Compose: order-service, fulfillment-service, Kafka)
-                ├─ :8080  POST /orders
-                └─ Kafka + consumer inside the same Docker network
+Laptop ── SSH tunnel ──► EC2 loopback :8080 (order-service)
+                         EC2 Docker Compose: order-service, fulfillment-service, Kafka
+                         Kafka + consumer stay inside the Docker network
 ```
 
 ## Route A — single EC2 instance (simplest)
@@ -25,8 +26,9 @@ Internet ──► EC2 (Docker Compose: order-service, fulfillment-service, Kafk
 - AMI: Amazon Linux 2023 (or Ubuntu 24.04)
 - Instance type: **t3.small** recommended — the Spring Boot services plus KRaft Kafka
   want more than t2.micro's 1 GiB; t3.micro works with tight heaps
-- Key pair + security group: SSH (22) from *your IP only*; TCP 8080 from *your IP* (or
-  0.0.0.0/0 briefly for the demo, then closed)
+- Key pair + security group: SSH (22) from *your IP only*. The default SSH-tunnel
+  workflow needs no inbound application port. If you opt into direct access, allow
+  TCP 8080 from *your IP only* and do not expose the unauthenticated admin port 8081.
 
 ```bash
 aws ec2 run-instances \
@@ -54,6 +56,8 @@ sudo dnf install -y git && git clone <repo-url> && cd EventFlow
 docker compose up --build -d
 
 # Option 2 — ship prebuilt images:
+#   (local)  docker build -t eventflow/order-service:latest -f order-service/Dockerfile .
+#   (local)  docker build -t eventflow/fulfillment-service:latest -f fulfillment-service/Dockerfile .
 #   (local)  docker save eventflow/order-service:latest eventflow/fulfillment-service:latest | gzip > images.tar.gz
 #   (local)  scp -i <key>.pem images.tar.gz docker-compose.yml ec2-user@<ip>:~/
 #   (ec2)    docker load < images.tar.gz && docker compose up -d

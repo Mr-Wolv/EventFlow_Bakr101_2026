@@ -11,24 +11,25 @@ each property demonstrated with real output ([evidence.md](evidence.md)).
 producer (acks=all, idempotent)
       │
       ▼
-Kafka topic "orders" ── durable log, retained records
+Kafka topic "orders" ── broker log (retention and storage apply)
       │
       ▼
 consumer group "fulfillment" (at-least-once delivery)
       │
       ├── IdempotentConsumer: eventId seen before? → skip, commit offset
       ├── FailureInjector (demo faults) → exception → DefaultErrorHandler
-      │        ├── retry ×3, exponential backoff (1s/2s/4s)
+      │        ├── up to 3 retries after initial delivery (1s/2s/4s)
       │        └── exhausted → DeadLetterPublishingRecoverer → orders.DLT
       └── markFulfilled: safe-to-repeat state transition
 ```
 
-## 1. Duplicate delivery → processed exactly once
+## 1. Duplicate delivery → suppressed within the running process
 
-Kafka's delivery guarantee is at-least-once, so duplicates are inevitable, not
-exceptional. `IdempotentConsumer` keeps a `ConcurrentHashMap.newKeySet()` of processed
-eventIds; `Set.add()` returns `false` for a repeat, making check-and-record one atomic
-step with no check-then-act race between consumer threads.
+Kafka's consumer delivery guarantee is at-least-once, so re-delivery after rebalances
+or failed offset commits is expected. `IdempotentConsumer` keeps a
+`ConcurrentHashMap.newKeySet()` of processed eventIds for the lifetime of one process;
+`Set.add()` returns `false` for a repeat, making check-and-record one atomic step with
+no check-then-act race between consumer threads.
 
 ```java
 public boolean tryProcess(UUID eventId) {
@@ -36,22 +37,25 @@ public boolean tryProcess(UUID eventId) {
 }
 ```
 
-Demonstrated in [evidence.md](evidence.md) Scenario 2 — the same `eventId` redelivered
-through the real broker logs `[DUPLICATE] ... skipping` and the stats endpoint still
-counts one unique event.
+Demonstrated in [evidence.md](evidence.md) Scenario 2 — the same `eventId` is manually
+re-produced while the consumer is running; it logs `[DUPLICATE] ... skipping` and the
+stats endpoint still counts one unique event. This is process-local duplicate
+suppression, not durable exactly-once processing.
 
-**Limitation:** the set is process-local. It does not survive a restart and is not
-shared across replicas. This is acceptable here because the downstream effect
+**Limitation:** the set does not survive a restart and is not shared across replicas.
+This is acceptable for the demonstration because the downstream effect
 (`markFulfilled`) is itself idempotent — the second application of the same state
 transition is a no-op. Production replacement: a durable processed-events store
 (unique constraint, Redis `SETNX`) or a compacted processed-events topic.
 
 ## 2. Consumer downtime → no event loss
 
-Kafka retains records; the consumer group's committed offset marks progress. While the
-consumer is down, produced records simply wait. On restart the group resumes from its
-committed offset (or from the beginning with `auto.offset.reset: earliest`, which is
-set here, so even a group with no prior commits reads everything).
+Kafka retains records while broker storage remains intact and within retention; the
+consumer group's committed offset marks progress. While the consumer is down, produced
+records wait on the broker. On consumer restart the group resumes from its committed
+offset (or from the beginning with `auto.offset.reset: earliest`, which is set here).
+The Compose broker has no persistent volume, so recreating it loses its data; this is
+not a broker-disaster-recovery guarantee.
 
 Demonstrated in [evidence.md](evidence.md) Scenario 3 — an order created during a full
 consumer stop is fulfilled seconds after the container starts.

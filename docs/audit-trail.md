@@ -24,13 +24,13 @@ the delivery side (the redelivery scenario Kafka consumers must always expect).
 ## Consume path (Fulfillment Service)
 
 ```
-@KafkaListener(topics = "orders", group = "fulfillment")
+@KafkaListener(topics = "${eventflow.topics.orders:orders}", groupId = "fulfillment")
   1. IdempotentConsumer.tryProcess(eventId)
-       ├─ false → [DUPLICATE] skip → listener returns → offset committed
+      ├─ false → [DUPLICATE] skip (within this process) → listener returns → offset committed
        └─ true  → eventId recorded
   2. FailureInjector.maybeFail(eventId)
        └─ fault armed → forget(eventId) → throw → DefaultErrorHandler
-             ├─ retries ×3 (1s/2s/4s backoff, [RETRY] logged)
+             ├─ up to 3 retries after initial delivery (1s/2s/4s backoff, [RETRY] logged)
              └─ exhausted → DeadLetterPublishingRecoverer → orders.DLT → offset committed
   3. OrderFulfillmentStore.markFulfilled(orderId)
        → [PROCESSING] … [FULFILLED] logged
@@ -54,8 +54,9 @@ the error handler finishes with a record). Consequences:
 | Idempotency set | Yes | Redeliveries after restart processed again | Durable processed-events store |
 | Fulfillment states | Yes | Status endpoint reports PENDING for old orders | PostgreSQL/JPA |
 
-None of these break correctness of the *demonstrated* behavior (Kafka's offsets and
-log are the durable layer); they bound how much *application state* survives.
+These limitations bound what survives an application restart. Kafka retains records
+and offsets while broker storage remains intact and within retention. The Compose
+broker has no persistent volume, so recreating that broker also loses its log.
 
 ## Known gaps (intentional, with upgrade paths)
 

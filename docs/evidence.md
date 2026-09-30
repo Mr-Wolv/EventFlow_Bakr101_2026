@@ -1,9 +1,12 @@
 # Evidence — Captured Transcripts
 
 All output below is **captured verbatim** from a real end-to-end run on the author's
-machine (Windows 11, Docker 29.4.2, Compose v5.1.3, Temurin JDK 21, Maven 3.9.16) on
-2026-09-29. Nothing here is hand-written output; greps and section headers were added
-for readability. Repro steps: [failure-scenarios.md](failure-scenarios.md).
+machine (Windows 11, Docker 29.4.2, Compose v5.1.3, Temurin JDK 21, Maven 3.9.16,
+Spring Boot 3.3.0) on 2026-09-29. This is historical pre-Java-25 evidence: its 19-test
+build and Kubernetes deployment describe that run, not the current 45-test Java 25
+source. Nothing in the captured output is rewritten; greps and section headers were
+added for readability. Repro steps: [failure-scenarios.md](failure-scenarios.md). Sections
+0–7 are the historical transcript; §8 records the current Java 25 Compose smoke check.
 
 ---
 
@@ -77,10 +80,11 @@ $ curl -s http://localhost:8081/__admin/stats
 
 Publish → fulfil latency: ~40 ms. Offsets visible (`orders-p0@0`).
 
-## 2. Duplicate event delivery — processed exactly once
+## 2. Duplicate event delivery — suppressed within the running process
 
 The exact event record from Scenario 1 is produced **again** to the topic via
-`kafka-console-producer` (simulating an at-least-once redelivery):
+`kafka-console-producer` while the consumer process is still running (simulating a
+consumer re-delivery):
 
 ```
 $ MSYS_NO_PATHCONV=1 docker compose exec -T kafka /opt/kafka/bin/kafka-console-producer.sh \
@@ -314,3 +318,18 @@ accepted values from the error itself. The handler behavior is also unit-tested
 | 5 | Retry exhaustion | 4 attempts → record in `orders.DLT` → partition unblocked |
 | 6 | Kubernetes (minikube + Strimzi) | Deployed live; in-cluster smoke test, scale 2→3, pod-kill failover, group rebalance — no event loss |
 | 7 | API edge cases | 404/405/415/400 with self-documenting messages on both services |
+
+## 8. Java 25 Compose smoke check (2026-09-30)
+
+This is a current-runtime validation summary, separate from the verbatim Java 21
+transcripts above.
+
+| Check | Result |
+|---|---|
+| `docker compose up -d --build --wait --wait-timeout 180` | Kafka, Kafka init, order-service, and fulfillment-service reached healthy/expected states |
+| Container JVMs | Temurin OpenJDK 25.0.4.1 in both services |
+| `mvn -B verify` | 45 tests passed; 0 failures, errors, or skips |
+| Order flow | `56b9c02d-cdb0-4008-8657-222a034beeef` reached `FULFILLED` |
+| Unsupported media type | Both `POST /orders` and `POST /__admin/failure` returned `415` |
+| Actuator health | Both services returned `UP` |
+| JaCoCo 0.8.15 line coverage | 95.49% combined (order-service 95.88%, fulfillment-service 95.24%) |

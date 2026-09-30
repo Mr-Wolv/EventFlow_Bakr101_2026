@@ -7,7 +7,8 @@ metadata:
     app.kubernetes.io/part-of: eventflow
 data:
   # Kafka bootstrap reachable from inside the cluster.
-  # Default: Strimzi single-node cluster from docs/kubernetes.md (verified working).
+  # Default: Strimzi single-node cluster used in the Java 21 live run (2026-09-29).
+  # Java 25 Kubernetes redeployment has not been verified.
   # For a host-side Kafka (docker compose) instead, use "host.docker.internal:9092".
   KAFKA_BOOTSTRAP_SERVERS: "my-cluster-kafka-bootstrap.kafka.svc.cluster.local:9092"
   KAFKA_TOPIC: "orders"

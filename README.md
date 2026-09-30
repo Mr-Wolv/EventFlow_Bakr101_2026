@@ -186,9 +186,9 @@ unreachable-branch gaps were engineered away honestly).
 
 **Toolchain:** the build targets Java 25 (`java.version=25` in the root [pom](pom.xml));
 compiling under an older JDK produces a wall of errors. On Windows with multiple JDKs,
-point `JAVA_HOME` at the JDK 25 install before running Maven. The committed
-[.vscode/settings.json](.vscode/settings.json) pins the VS Code Java language server to
-the same JDK so IDE analysis matches the build.
+point `JAVA_HOME` at the JDK 25 install before running Maven — and point your IDE's
+Java language server at the same JDK so IDE analysis matches the build. (IDE-local
+settings are per-machine by nature and are git-ignored.)
 
 ---
 
@@ -219,7 +219,7 @@ for this project — no instance was ever launched, and the docs say so explicit
 
 ## CI
 
-[.github/workflows/ci.yml](.github/workflows/ci.yml) — two jobs on every push:
+[.github/workflows/ci.yml](.github/workflows/ci.yml) — jobs on every push (three plus a guard):
 
 1. **Build, test, Docker images** — JDK 25 (Temurin) with Maven caching, `mvn -B verify`
   (50 unit tests, 100%-line-coverage gate) plus the AWS Lambda module (12 tests, same

@@ -2,6 +2,11 @@
 # event under orders/<orderId>/<eventId>.json.
 resource "aws_s3_bucket" "archive" {
   bucket = var.archive_bucket
+
+  # Ephemeral validation stack: let `terraform destroy` remove the bucket with
+  # its archived test objects instead of failing with BucketNotEmpty
+  # (hit for real in the first CI run of this job).
+  force_destroy = true
 }
 
 # DynamoDB is the durable idempotency store for the AWS path: the Lambda's

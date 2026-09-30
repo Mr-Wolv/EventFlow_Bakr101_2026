@@ -2,15 +2,15 @@
 
 [![CI](https://github.com/Mr-Wolv/EventFlow_Bakr101_2026/actions/workflows/ci.yml/badge.svg)](https://github.com/Mr-Wolv/EventFlow_Bakr101_2026/actions/workflows/ci.yml)
 
-**Java 21 | Spring Boot | Apache Kafka | Docker | Kubernetes | GitHub Actions**
+**Java 25 | Spring Boot 3.5.16 | Apache Kafka | Docker | Kubernetes | GitHub Actions**
 
 Two independently deployable Spring Boot services communicating through asynchronous
 Kafka events. A deliberately small system built to demonstrate distributed-systems
 fundamentals with reproducible evidence — not another CRUD app.
 
 - **Order Service** accepts `POST /orders` and publishes an `OrderCreated` event.
-- **Fulfillment Service** consumes the event, is **idempotent**, retries transient
-  failures with exponential backoff, and dead-letters poison records.
+- **Fulfillment Service** suppresses duplicate event IDs within its current process,
+  retries transient failures with exponential backoff, and dead-letters poison records.
 
 No frontend. No authentication. No database. Every scope decision is documented and
 deliberate (see [Scope decisions](#scope-decisions)).
@@ -21,12 +21,12 @@ This project makes a point of not claiming anything it cannot show. The honest s
 
 | Capability | Status |
 |---|---|
-| Build + 19 unit tests | ✅ **Verified** — `mvn -B verify`, output in [docs/evidence.md](docs/evidence.md) |
-| Docker Compose stack (Kafka 4.0 KRaft + topic init + both services) | ✅ **Verified** — all containers healthy |
-| Happy path, duplicate delivery, consumer downtime, retry + recovery, dead-letter topic | ✅ **Verified** — captured terminal transcripts in [docs/evidence.md](docs/evidence.md) |
-| Kubernetes on minikube + Strimzi Kafka | ✅ **Verified** — deployed to a live minikube cluster (Kubernetes v1.37) with **in-cluster Kafka via Strimzi**; in-cluster smoke test, replica scaling, pod-kill failover and consumer-group rebalance captured in [docs/evidence.md](docs/evidence.md) §6 |
+| Build + 45 unit tests | ✅ **Verified** — Java 25 `mvn -B verify`; [docs/evidence.md](docs/evidence.md) preserves the earlier Java 21 / 19-test transcript |
+| Docker Compose stack (Kafka 4.0 KRaft + topic init + both services) | ✅ **Java 25 smoke-tested** — all containers healthy; order reached `FULFILLED`; both APIs returned `415` for unsupported media types. Details in [docs/evidence.md](docs/evidence.md) §8 |
+| Duplicate delivery, consumer downtime, retry + recovery, dead-letter topic | 🕰 **Historically verified** — Java 21 transcripts in [docs/evidence.md](docs/evidence.md) §§2–5; these fault scenarios were not rerun after the Java 25 upgrade |
+| Kubernetes on minikube + Strimzi Kafka | 🕰 **Historically verified** — deployed on 2026-09-29 using Java 21, Minikube v1.39.0, and in-cluster Strimzi Kafka; Java 25 redeployment was not run because no Kubernetes cluster is available here. Transcripts: [docs/evidence.md](docs/evidence.md) §6 |
 | AWS EC2 deployment | 📝 **Documented only** — creating an AWS account requires a payment method, which is not available for this project. Full workflow in [docs/aws-deployment.md](docs/aws-deployment.md) |
-| CI | ✅ **Verified** — green on every push: build + tests + Docker images, plus a kind job that deploys Strimzi Kafka and smoke-tests the full in-cluster flow ([Actions](https://github.com/Mr-Wolv/EventFlow_Bakr101_2026/actions)) |
+| CI | **Configured** — pushes and pull requests targeting `main` run Maven verification, image builds, and a kind/Strimzi smoke test. Current run status is shown by the [Actions page](https://github.com/Mr-Wolv/EventFlow_Bakr101_2026/actions). |
 
 "Documented" is stated as such everywhere it applies; nothing in the docs pretends a
 cloud resource was provisioned.
@@ -37,10 +37,9 @@ cloud resource was provisioned.
 
 ![EventFlow architecture](architecture/architecture.png)
 
-*The system as built and verified: both services in the `eventflow` namespace, Kafka via
-Strimzi in `kafka`, the retry → dead-letter path, and the in-memory state each service
-owns. Source: [`architecture/generate.py`](architecture/generate.py) — regenerate with
-`python architecture/generate.py`.*
+*The current Java 25 service topology: both services in `eventflow`, Kafka via Strimzi in
+`kafka`, and process-local state. The live Kubernetes verification shown in the diagram
+is historical (Java 21, 2026-09-29). Source: [`architecture/generate.py`](architecture/generate.py).*
 
 Event published to the `orders` topic (keyed by `orderId` for per-order ordering):
 
@@ -80,7 +79,7 @@ docker compose logs -f order-service fulfillment-service
 
 ### Run without Docker (local JVMs)
 
-Requires JDK 21 and a Kafka broker on `localhost:9092` (for example the single node
+Requires JDK 25 and a Kafka broker on `localhost:9092` (for example the single node
 from the [Apache Kafka quickstart](https://kafka.apache.org/quickstart)).
 
 ```bash
@@ -100,10 +99,10 @@ Full transcripts: [docs/evidence.md](docs/evidence.md). Repro steps: [docs/failu
 
 | Scenario | Mechanism | Expected result |
 |----------|-----------|-----------------|
-| **Duplicate event delivery** | Same `eventId` delivered twice (manual redelivery) | `[DUPLICATE] ... skipping` — processed exactly once |
+| **Duplicate event delivery** | Same `eventId` delivered twice (manual redelivery) | `[DUPLICATE] ... skipping` while the consumer's in-memory dedup set survives |
 | **Consumer downtime** | Stop fulfillment, create order, restart | Kafka retains the event; processed on restart (`auto.offset.reset: earliest`) |
-| **Partial failure → retry → recovery** | Arm `ONCE_PER_EVENT` fault; processing throws after receipt | Retries with backoff (1s/2s/4s), succeeds on redelivery, order fulfilled |
-| **Retry exhaustion → dead-letter** | Arm `ALWAYS` fault | Record sent to `orders.DLT`, offset committed, processing continues |
+| **Partial failure → retry → recovery** | Arm `ONCE_PER_EVENT` fault; processing throws after receipt | Up to 3 retries after initial delivery (1s/2s/4s), then success and fulfillment |
+| **Retry exhaustion → dead-letter** | Arm `ALWAYS` fault | After 3 retries (4 delivery attempts total), record goes to `orders.DLT`; processing continues |
 
 The duplicate-delivery demo needs the same `eventId` twice — `POST /orders` always
 creates a *new* event, so the demo produces the original event record directly to the
@@ -124,12 +123,12 @@ returns immediately with `201` and does **not** wait for the broker or the consu
 That decoupling is what makes the system eventually consistent.
 
 **Consume path (Fulfillment Service).** The listener checks the event's `eventId`
-against a dedup set (atomic check-and-record), so a redelivered event is skipped and
-committed. New events pass through a failure-injection point (for the demos), then
+against a process-local dedup set (atomic check-and-record), so a redelivered event is
+skipped while that process is alive. New events pass through a failure-injection point (for the demos), then
 mark the order `FULFILLED` — a safe-to-repeat state transition. A thrown exception is
-retried in-process with exponential backoff (1s, 2s, 4s); records that keep failing
-are published to `orders.DLT` with their original payload and failure headers, and the
-partition moves on.
+retried in-process up to three times after the initial delivery, with exponential
+backoff (1s, 2s, 4s); records that keep failing are published to `orders.DLT` with
+their original payload and failure headers, and the partition moves on.
 
 The full step-by-step processing contract — including what state survives a crash at
 each point — is in [docs/audit-trail.md](docs/audit-trail.md), and the guarantee
@@ -172,10 +171,10 @@ Content-Type, `500` only for genuine unexpected failures. Verified per-case in
 mvn -B verify
 ```
 
-19 unit tests across both modules, including: idempotency under a 16-thread duplicate
-race (exactly one acceptance), duplicate delivery skipping, failure injection with
-idempotency-record rollback, retry-recovery on redelivery, and API edge-case semantics
-(404/405/415/400 never masquerading as 500s).
+45 unit tests across both modules, including atomic event-ID deduplication under a
+16-thread race, duplicate delivery skipping, failure injection with idempotency-record
+rollback, retry recovery, asynchronous publish callbacks, error mapping, and Kafka
+error-handler configuration.
 
 ---
 
@@ -183,10 +182,10 @@ idempotency-record rollback, retry-recovery on redelivery, and API edge-case sem
 
 Manifests live in [`k8s/`](k8s/) — Namespace, ConfigMap, two Deployments (readiness +
 liveness probes, resource requests/limits), two ClusterIP Services, and the Strimzi
-`KafkaTopic` CR for the `orders` topic. Fulfillment runs **2 replicas** to demonstrate
-consumer-group distribution and replica management. This exact setup was deployed and
-verified on a live minikube cluster with in-cluster Kafka — transcripts in
-[docs/evidence.md](docs/evidence.md) §6.
+`KafkaTopic` CR for the `orders` topic. Fulfillment runs **2 replicas**; with the demo's
+single partition, only one replica consumes at a time. This setup was deployed and
+verified on Minikube with Java 21 on 2026-09-29; a Java 25 Kubernetes redeployment has
+not been run. Historical transcripts are in [docs/evidence.md](docs/evidence.md) §6.
 
 ```bash
 kubectl apply -f k8s/namespace.yaml   # first — see note in docs/kubernetes.md
@@ -208,13 +207,13 @@ for this project — no instance was ever launched, and the docs say so explicit
 
 [.github/workflows/ci.yml](.github/workflows/ci.yml) — two jobs on every push:
 
-1. **Build, test, Docker images** — JDK 21 (Temurin) with Maven caching, `mvn -B verify`
-   (19 unit tests), then `docker compose build` for both service images.
+1. **Build, test, Docker images** — JDK 25 (Temurin) with Maven caching, `mvn -B verify`
+  (45 unit tests), then `docker compose build` for both service images.
 2. **Kubernetes (kind)** — builds the images, boots a kind cluster, deploys the Strimzi
    operator + single-node Kafka, applies [`k8s/`](k8s/), then smoke-tests the real
    in-cluster flow: `POST /orders` → consumed → `FULFILLED` (polls up to 60s, fails the
-   job otherwise). The same evidence as [docs/evidence.md](docs/evidence.md) §6,
-   re-proven on every commit.
+  job otherwise). This CI job checks the happy path only; it does not repeat the
+  manual scaling and pod-failover scenarios in the historical [docs/evidence.md](docs/evidence.md) §6.
 
 ---
 
@@ -222,7 +221,7 @@ for this project — no instance was ever launched, and the docs say so explicit
 
 ```
 EventFlow/
-├── pom.xml                             # Multi-module root (Spring Boot 3.3 parent)
+├── pom.xml                             # Multi-module root (Spring Boot 3.5 parent)
 ├── architecture/
 │   ├── architecture.png                # System diagram (rendered)
 │   └── generate.py                     # Diagram source — python architecture/generate.py
@@ -267,9 +266,9 @@ EventFlow/
 
 | Layer | Technology |
 |-------|-----------|
-| Language | Java 21 |
-| Framework | Spring Boot 3.3 (Web, Validation, Actuator, Spring Kafka) |
-| Messaging | Apache Kafka 4.x in KRaft mode — Compose runs 4.0, Strimzi ran 4.3.1; the same service images were verified against both brokers |
+| Language | Java 25 |
+| Framework | Spring Boot 3.5.16 (Web, Validation, Actuator, Spring Kafka) |
+| Messaging | Apache Kafka 4.x in KRaft mode — Compose runs 4.0; Java 21-era service images were also exercised against Strimzi Kafka 4.3.1 |
 | Containerization | Docker (multi-stage builds) |
 | Orchestration | Kubernetes (Deployments, Services, ConfigMaps, probes) |
 | CI | GitHub Actions |
@@ -282,10 +281,13 @@ Deliberate limitations, each with a documented production upgrade path in
 
 - **In-memory state** — no database; an Order Service restart loses orders. Production:
   PostgreSQL + JPA, or the event-sourced path.
-- **Process-local idempotency** — the dedup set does not survive restarts and is not
-  shared across replicas. Fulfillment itself is a safe-to-repeat state transition, so
-  redelivery stays safe. Production: durable processed-events store (DB unique
-  constraint / Redis) or a processed-events topic.
+- **Process-local idempotency** — duplicate event IDs are suppressed only while the
+  consumer process retains its in-memory set; it does not survive restarts or span
+  replicas. Fulfillment's state transition is safe to repeat. Production: durable
+  processed-events store (DB unique constraint / Redis) or a processed-events topic.
+- **Broker persistence** — Docker Compose does not mount a persistent volume for Kafka;
+  recreating the broker loses its records and offsets. Persistent K8s broker storage is
+  determined by the Strimzi Kafka configuration, not by the service manifests here.
 - **Single-partition topic** — with one partition only one consumer replica receives
   records. Production: partition the topic by `orderId`.
 - **Fire-and-forget publishing** — delivery is confirmed via logged callbacks, not

@@ -30,8 +30,10 @@ curl -s http://localhost:8081/__admin/orders/<orderId>/status  # {"status":"FULF
 
 ## Scenario 2: Duplicate Event Delivery
 
-At-least-once delivery means the consumer *will* see the same event more than once
-(producer retry, rebalance, offset commit failure). The consumer must process it once.
+At-least-once delivery means a consumer may see the same event more than once (for
+example after a rebalance or failed offset commit). The demo manually re-produces an
+event with the same ID to exercise the process-local dedup set; this is not a durable
+exactly-once guarantee.
 
 **Step 1 — Create an order and note the event's offset in the order-service log:**
 
@@ -85,8 +87,9 @@ docker compose logs fulfillment-service | grep -E "PROCESSING|FULFILLED"
 # [FULFILLED] order <id>
 ```
 
-Works because of `auto-offset-reset: earliest` plus Kafka's durable log: the group
-resumes from its last committed offset, and the retained record is consumed on startup.
+Works because of `auto-offset-reset: earliest` plus the broker's retained log: the group
+resumes from its last committed offset while broker storage remains intact and the
+record is within retention.
 
 ---
 
@@ -130,7 +133,7 @@ curl -s -X POST http://localhost:8081/__admin/failure \
 curl -s -X POST http://localhost:8080/orders \
   -H "Content-Type: application/json" \
   -d '{"customerId": "550e8400-e29b-41d4-a716-446655440000", "amount": 75.00}'
-# 3 retries (1s/2s/4s) all fail → record published to orders.DLT, offset committed
+# Initial delivery plus up to 3 retries (1s/2s/4s) fail → record published to orders.DLT, offset committed
 ```
 
 Verify the dead-letter record and that processing continued afterwards:

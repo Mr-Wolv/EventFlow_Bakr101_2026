@@ -22,7 +22,7 @@ import java.util.Map;
 /**
  * Retry and dead-letter configuration for the Kafka listener.
  *
- * - Retry: up to 4 attempts with exponential backoff (1s, 2s, 4s — ~7s total).
+ * - Retry: 1 initial delivery plus up to 3 retries, with 1s, 2s, and 4s backoff (~7s total).
  * - Exhausted records are published to "&lt;topic&gt;.DLT" with the original record and
  *   failure headers added by DeadLetterPublishingRecoverer; the failed partition's
  *   offset is then committed so processing continues.

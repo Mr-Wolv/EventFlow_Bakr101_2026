@@ -1,8 +1,9 @@
 # Kubernetes Deployment
 
-> **Verified path:** this exact flow (minikube + Strimzi single-node Kafka + these
-> manifests, including scale-up, pod-kill failover and consumer-group rebalance) was
-> executed successfully — captured transcripts in [evidence.md](evidence.md) §6.
+> **Historical verification:** this flow (Minikube v1.39.0 + Strimzi single-node Kafka
+> + these manifests, including scale-up, pod-kill failover and consumer-group rebalance)
+> was executed with Java 21 on 2026-09-29 — captured in [evidence.md](evidence.md) §6.
+> The Java 25 deployment has not been rerun because no Kubernetes cluster is available.
 
 ## Prerequisites
 

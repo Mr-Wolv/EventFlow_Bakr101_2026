@@ -42,7 +42,8 @@
                 </configuration>
             </plugin>
             <!-- Coverage is enforced, not decorative: `mvn verify` fails if line
-                 coverage drops below the gate (figures recorded in evidence §8/§10). -->
+                 coverage is not 100% (evidence §8/§10/§13). Gaps must be closed
+                 with tests or proven-unreachable code, never ignored. -->
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
@@ -69,7 +70,7 @@
                                         <limit>
                                             <counter>LINE</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>0.95</minimum>
+                                            <minimum>1.0</minimum>
                                         </limit>
                         			</limits>
                                     </rule>

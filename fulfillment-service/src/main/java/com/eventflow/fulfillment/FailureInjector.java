@@ -46,23 +46,29 @@ public class FailureInjector {
         return injectedFailures;
     }
 
-    /** Throws when a fault is armed for this event; returns normally otherwise. */
+    /**
+     * Throws when a fault is armed for this event; returns normally otherwise.
+     *
+     * Deliberate shape: {@code throw fault(...)} rather than calling a helper that
+     * throws. JaCoCo places probes at control-flow merge points, so a call whose
+     * execution always ends in an exception never reaches its follow-up probe and
+     * is reported as uncovered even though it runs. Throwing the returned
+     * exception directly makes every executed line probeable.
+     */
     public void maybeFail(UUID eventId) {
         FaultType current = fault;
-        switch (current) {
-            case ALWAYS -> inject(eventId, "always-fail fault armed");
-            case ONCE_PER_EVENT -> {
-                if (failedOnce.add(eventId)) {
-                    inject(eventId, "once-per-event fault armed");
-                }
-            }
-            case NONE -> { /* no-op */ }
+        if (current == FaultType.ALWAYS) {
+            throw fault(eventId, "always-fail fault armed");
+        } else if (current == FaultType.ONCE_PER_EVENT && failedOnce.add(eventId)) {
+            throw fault(eventId, "once-per-event fault armed");
         }
+        /* FaultType.NONE: no-op */
     }
 
-    private void inject(UUID eventId, String reason) {
+    /** Logs and counts the injected fault, returning the exception to throw. */
+    private IllegalStateException fault(UUID eventId, String reason) {
         injectedFailures++;
         log.error("[FAULT-INJECTED] failing processing of event {} ({})", eventId, reason);
-        throw new IllegalStateException("Injected failure for event " + eventId + " (" + reason + ")");
+        return new IllegalStateException("Injected failure for event " + eventId + " (" + reason + ")");
     }
 }

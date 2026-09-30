@@ -40,6 +40,16 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    @DisplayName("a route-less NoResourceFoundException falls back to the generic message")
+    void routelessNoResourceFallsBack() {
+        ResponseEntity<Map<String, Object>> response
+                = handler.handleNoResource(new NoResourceFoundException(null, null));
+
+        assertThat(response.getStatusCode().value()).isEqualTo(404);
+        assertThat(response.getBody()).containsEntry("message", "no such route");
+    }
+
+    @Test
     @DisplayName("a malformed path variable maps to 400 with the offending value named")
     void malformedPathVariableIs400() {
         MethodParameter parameter = new MethodParameter(

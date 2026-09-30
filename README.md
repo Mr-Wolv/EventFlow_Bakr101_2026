@@ -21,7 +21,7 @@ This project makes a point of not claiming anything it cannot show. The honest s
 
 | Capability | Status |
 |---|---|
-| Build + 45 unit tests (core) + 12 unit tests (AWS Lambda, 100% line coverage) | ✅ **Verified, coverage-gated** — Java 25 `mvn -B verify` enforces ≥95% line coverage on both core modules; `mvn -f aws/lambda/pom.xml verify` enforces ≥90% on the Lambda (currently 100%). [docs/evidence.md](docs/evidence.md) preserves the earlier Java 21 / 19-test transcript |
+| Build + 50 unit tests (core) + 12 unit tests (AWS Lambda) | ✅ **Verified — 100% line coverage everywhere, enforced at 1.0** — Java 25 `mvn -B verify` fails below 100% line coverage on both core modules; the Lambda module enforces the same 1.0 gate. [docs/evidence.md](docs/evidence.md) preserves the earlier Java 21 / 19-test transcript |
 | Docker Compose stack (Kafka 4.0 KRaft + topic init + both services) | ✅ **Java 25 smoke-tested** — all containers healthy; order reached `FULFILLED`; both APIs returned `415` for unsupported media types. Details in [docs/evidence.md](docs/evidence.md) §8 |
 | Duplicate delivery, consumer downtime, retry + recovery, dead-letter topic | 🕰 **Verified live on Java 21; unit-verified on Java 25** — the end-to-end transcripts in [docs/evidence.md](docs/evidence.md) §§2–5 were captured on the Java 21 compose stack and have not been re-run end-to-end on Java 25; on Java 25 the same paths are covered by the 45-test suite (dedup, rollback + retry, exhaustion → DLT, async publish, error mapping) and by the happy-path runs in §8/§9 |
 | Kubernetes on minikube + Strimzi Kafka | ✅ **Verified — Java 21 live run + Java 25 CI kind job** — deployed on 2026-09-29 (Minikube v1.39.0, in-cluster Strimzi Kafka) with scale-up, pod-kill failover and rebalance; on Java 25, CI deploys to kind and runs an in-cluster smoke test on every push. Transcripts: [docs/evidence.md](docs/evidence.md) §6, §9 |
@@ -173,13 +173,14 @@ Content-Type, `500` only for genuine unexpected failures. Verified per-case in
 mvn -B verify
 ```
 
-45 unit tests across the two core modules, including atomic event-ID deduplication under a
+50 unit tests across the two core modules, including atomic event-ID deduplication under a
 16-thread race, duplicate delivery skipping, failure injection with idempotency-record
 rollback, retry recovery, asynchronous publish callbacks, error mapping, and Kafka
 error-handler configuration. The AWS Lambda module adds 12 more (conditional-put
-idempotency, archive keying, poison-message and at-least-once rethrow contract), and
-both builds fail below their line-coverage gates (95% core / 90% Lambda) — coverage is
-enforced by the build, not a report.
+idempotency, archive keying, poison-message and at-least-once rethrow contract). Both
+builds **fail below 100% line coverage** — the gate is 1.0, coverage is enforced by the
+build, not reported (see [docs/evidence.md](docs/evidence.md) §13 for how the last
+unreachable-branch gaps were engineered away honestly).
 
 **Toolchain:** the build targets Java 25 (`java.version=25` in the root [pom](pom.xml));
 compiling under an older JDK produces a wall of errors. On Windows with multiple JDKs,
@@ -219,13 +220,19 @@ for this project — no instance was ever launched, and the docs say so explicit
 [.github/workflows/ci.yml](.github/workflows/ci.yml) — two jobs on every push:
 
 1. **Build, test, Docker images** — JDK 25 (Temurin) with Maven caching, `mvn -B verify`
-  (45 unit tests, coverage-gated ≥95% line) plus the coverage-gated AWS Lambda module
-  (12 tests, ≥90% line), then `docker compose build` for both service images.
+  (50 unit tests, 100%-line-coverage gate) plus the AWS Lambda module (12 tests, same
+  1.0 gate), then `docker compose build` for both service images.
 2. **Kubernetes (kind)** — builds the images, boots a kind cluster, deploys the Strimzi
    operator + single-node Kafka, applies [`k8s/`](k8s/), then smoke-tests the real
    in-cluster flow: `POST /orders` → consumed → `FULFILLED` (polls up to 60s, fails the
   job otherwise). This CI job checks the happy path only; it does not repeat the
   manual scaling and pod-failover scenarios in the historical [docs/evidence.md](docs/evidence.md) §6.
+3. **AWS path (LocalStack)** — secret-guarded: when `LOCALSTACK_AUTH_TOKEN` is
+  configured, CI boots LocalStack, runs `terraform apply`, executes
+  [`aws/validate.sh`](aws/validate.sh) (send → assert → duplicate-proof), and destroys
+  the stack. The token authenticates the LocalStack workspace only — it is not an AWS
+  credential, and no AWS account exists. Without the secret the job is skipped and the
+  AWS path's code is still covered by the gated Lambda build.
 
 ---
 

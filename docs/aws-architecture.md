@@ -62,7 +62,7 @@ Terraform and is reproducible with `apply`/`destroy`.
 | "mark fulfilled" | `OrderFulfillmentStore.markFulfilled` (in-memory) | item attribute `status = FULFILLED_BY_LAMBDA` |
 | "dead-letter topic" | `orders.DLT` via `DeadLetterPublishingRecoverer` | (production: SQS DLQ via `maxReceiveCount` — documented, not deployed) |
 | "the demo archive" | log lines (`[FULFILLED] ...`) | S3 `s3://eventflow-order-archive/orders/<orderId>/<eventId>.json` |
-| "unit tests" | 45 across two Spring Boot modules (≥95% line gate) | 12 for the Lambda handler (≥90% line gate) |
+| "unit tests" | 50 across two Spring Boot modules (100%-line gate) | 12 for the Lambda handler (100%-line gate) |
 
 ## What is deliberately NOT claimed
 

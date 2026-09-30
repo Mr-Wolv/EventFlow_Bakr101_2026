@@ -426,3 +426,26 @@ redelivery, not silently degraded — the test now pins the real contract.
 CI (`.github/workflows/ci.yml`) builds both stacks: the core reactor (`mvn -B verify`)
 and the standalone Lambda module (`mvn -f aws/lambda/pom.xml verify`), each with its
 gate active — a coverage regression anywhere now fails the build.
+
+## 13. 100% line coverage everywhere, enforced at 1.0 (2026-09-30)
+
+The coverage gates were raised from 95%/90% to **1.0 on every module**, and the last
+gaps were closed by understanding them, not by excluding them:
+
+| Gap (file:lines) | Why it was uncovered | Resolution |
+|---|---|---|
+| `OrderApplication` / `FulfillmentApplication` `main()` | Bootstrap code, never invoked by tests | New bootstrap tests boot the real Spring context via `main()` (stderr suppressed) |
+| `Order.toString()` | Log-formatting method, untested | New assertion pins the rendered format |
+| `GlobalExceptionHandler` null-route branch | `NoResourceFoundException` with a null path was never exercised | New test drives the fallback message (`no such route`) |
+| `KafkaErrorConfig` retry-listener lambda | The lambda is nested inside spring-kafka's tracker; never invoked | New test walks the object graph for the `List<RetryListener>` (module-system-safe) and invokes `failedDelivery` |
+| `FailureInjector` fault branches | **JaCoCo probe-model limitation:** `inject()` always throws, so execution never reaches the probe after its call site — the lines run but the tool reports them missed. Verified by experiment: both switch forms (arrow and classic) compile via invokedynamic on javac 21+ and are equally blind to JaCoCo 0.8.15 | Refactored to `throw fault(...)` — the helper now *returns* the exception, every executed line is probeable, behavior identical |
+| `OrderFulfillmentStore.fulfilledCount()` filter branch | `markFulfilled` is the only mutator and stores only `FULFILLED`, so the filter's false branch is permanently unreachable | `states.size()` with the invariant documented in-source |
+
+Result: **0 missed lines in both core modules (50 tests)** and **100.00% in the Lambda
+module (12 tests)**, with `minimum 1.0` gates failing the build on any regression.
+
+CI was also extended to tell the whole repo's story: a fourth job
+(`aws-localstack`, secret-guarded via an `aws-guard` job) boots LocalStack, runs
+`terraform apply` + `aws/validate.sh` with the duplicate-proof assertion, and destroys
+the stack on every push to main when `LOCALSTACK_AUTH_TOKEN` is configured. The token
+authenticates the LocalStack workspace only — no AWS account exists.

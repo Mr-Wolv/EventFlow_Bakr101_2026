@@ -25,7 +25,13 @@ public class OrderFulfillmentStore {
         return Map.copyOf(states);
     }
 
+    /**
+     * Count of fulfilled orders. {@code markFulfilled} is the only mutator and
+     * stores only {@code FULFILLED}, so every entry is a fulfilled order — the
+     * size is the count. (A stream filter here would carry a permanently
+     * unreached branch: no code path ever stores PENDING.)
+     */
     public long fulfilledCount() {
-        return states.values().stream().filter(s -> s == OrderStatus.FULFILLED).count();
+        return states.size();
     }
 }

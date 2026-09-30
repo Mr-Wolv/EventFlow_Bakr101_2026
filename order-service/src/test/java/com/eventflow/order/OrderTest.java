@@ -29,4 +29,16 @@ class OrderTest {
         Order b = new Order(UUID.randomUUID(), BigDecimal.TEN);
         assertThat(a.getId()).isNotEqualTo(b.getId());
     }
+
+    @Test
+    @DisplayName("toString renders id, customer, amount and timestamp for log lines")
+    void toStringRendersAllFields() {
+        Order order = new Order(UUID.fromString("550e8400-e29b-41d4-a716-446655440000"), new BigDecimal("125.50"));
+
+        assertThat(order.toString())
+                .startsWith("Order[id=")
+                .contains("customerId=550e8400-e29b-41d4-a716-446655440000")
+                .contains("amount=125.50")
+                .contains("createdAt=");
+    }
 }

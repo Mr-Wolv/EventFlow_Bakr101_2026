@@ -170,7 +170,7 @@ text((M, 38), "EventFlow", 34, TXT, bold=True)
 text((M, 88), "Two Spring Boot services · asynchronous Kafka events · failure modes verified end-to-end", 15, MUTED)
 
 px = M
-for p in ["Java 21", "Spring Boot 3.3", "Apache Kafka 4.x (KRaft)", "Docker", "Kubernetes", "GitHub Actions"]:
+for p in ["Java 25", "Spring Boot 3.5.16", "Apache Kafka 4.x (KRaft)", "Docker", "Kubernetes", "GitHub Actions"]:
     w = measure(p, 12) + 26
     d.rounded_rectangle([_S(px), _S(118), _S(px + w), _S(146)], radius=14 * SS, outline=BORDER, width=SS)
     text((px + w / 2, 132), p, 12, "#C6CFDF", anchor="mm")

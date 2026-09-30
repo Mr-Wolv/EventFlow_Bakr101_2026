@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Mr-Wolv/EventFlow_Bakr101_2026/actions/workflows/ci.yml/badge.svg)](https://github.com/Mr-Wolv/EventFlow_Bakr101_2026/actions/workflows/ci.yml)
 
-**Java 21 | Spring Boot | Apache Kafka | Docker | Kubernetes | GitHub Actions**
+**Java 25 | Spring Boot | Apache Kafka | Docker | Kubernetes | GitHub Actions**
 
 Two independently deployable Spring Boot services communicating through asynchronous
 Kafka events. A deliberately small system built to demonstrate distributed-systems
@@ -80,7 +80,7 @@ docker compose logs -f order-service fulfillment-service
 
 ### Run without Docker (local JVMs)
 
-Requires JDK 21 and a Kafka broker on `localhost:9092` (for example the single node
+Requires JDK 25 and a Kafka broker on `localhost:9092` (for example the single node
 from the [Apache Kafka quickstart](https://kafka.apache.org/quickstart)).
 
 ```bash
@@ -208,7 +208,7 @@ for this project — no instance was ever launched, and the docs say so explicit
 
 [.github/workflows/ci.yml](.github/workflows/ci.yml) — two jobs on every push:
 
-1. **Build, test, Docker images** — JDK 21 (Temurin) with Maven caching, `mvn -B verify`
+1. **Build, test, Docker images** — JDK 25 (Temurin) with Maven caching, `mvn -B verify`
    (19 unit tests), then `docker compose build` for both service images.
 2. **Kubernetes (kind)** — builds the images, boots a kind cluster, deploys the Strimzi
    operator + single-node Kafka, applies [`k8s/`](k8s/), then smoke-tests the real
@@ -222,7 +222,7 @@ for this project — no instance was ever launched, and the docs say so explicit
 
 ```
 EventFlow/
-├── pom.xml                             # Multi-module root (Spring Boot 3.3 parent)
+├── pom.xml                             # Multi-module root (Spring Boot 3.5 parent)
 ├── architecture/
 │   ├── architecture.png                # System diagram (rendered)
 │   └── generate.py                     # Diagram source — python architecture/generate.py
@@ -267,8 +267,8 @@ EventFlow/
 
 | Layer | Technology |
 |-------|-----------|
-| Language | Java 21 |
-| Framework | Spring Boot 3.3 (Web, Validation, Actuator, Spring Kafka) |
+| Language | Java 25 |
+| Framework | Spring Boot 3.5.16 (Web, Validation, Actuator, Spring Kafka) |
 | Messaging | Apache Kafka 4.x in KRaft mode — Compose runs 4.0, Strimzi ran 4.3.1; the same service images were verified against both brokers |
 | Containerization | Docker (multi-stage builds) |
 | Orchestration | Kubernetes (Deployments, Services, ConfigMaps, probes) |

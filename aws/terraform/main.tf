@@ -40,6 +40,6 @@ resource "aws_dynamodb_table" "orders" {
 # at-least-once delivery, exactly like the Kafka topic; ordering semantics
 # (and what changes) are discussed in docs/aws-architecture.md.
 resource "aws_sqs_queue" "orders" {
-  name                      = var.queue_name
+  name                       = var.queue_name
   visibility_timeout_seconds = 60
 }

@@ -31,8 +31,8 @@ resource "aws_lambda_function" "order_fulfillment" {
 
 # SQS → Lambda: the event-bridge equivalent of the Kafka path's consumer group.
 resource "aws_lambda_event_source_mapping" "orders" {
-  event_source_arn  = aws_sqs_queue.orders.arn
-  function_name     = aws_lambda_function.order_fulfillment.arn
-  batch_size        = 5
-  enabled           = true
+  event_source_arn = aws_sqs_queue.orders.arn
+  function_name    = aws_lambda_function.order_fulfillment.arn
+  batch_size       = 5
+  enabled          = true
 }

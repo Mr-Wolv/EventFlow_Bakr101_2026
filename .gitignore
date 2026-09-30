@@ -29,6 +29,7 @@ bin/
 *.tfstate.backup
 aws/terraform/tfplan
 aws/terraform/.terraform-build/
+aws/lambda/dependency-reduced-pom.xml
 
 # Local diagnostics
 diag-*.json

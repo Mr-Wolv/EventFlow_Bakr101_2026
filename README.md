@@ -26,6 +26,7 @@ This project makes a point of not claiming anything it cannot show. The honest s
 | Duplicate delivery, consumer downtime, retry + recovery, dead-letter topic | 🕰 **Verified live on Java 21; unit-verified on Java 25** — the end-to-end transcripts in [docs/evidence.md](docs/evidence.md) §§2–5 were captured on the Java 21 compose stack and have not been re-run end-to-end on Java 25; on Java 25 the same paths are covered by the 45-test suite (dedup, rollback + retry, exhaustion → DLT, async publish, error mapping) and by the happy-path runs in §8/§9 |
 | Kubernetes on minikube + Strimzi Kafka | ✅ **Verified — Java 21 live run + Java 25 CI kind job** — deployed on 2026-09-29 (Minikube v1.39.0, in-cluster Strimzi Kafka) with scale-up, pod-kill failover and rebalance; on Java 25, CI deploys to kind and runs an in-cluster smoke test on every push. Transcripts: [docs/evidence.md](docs/evidence.md) §6, §9 |
 | AWS EC2 deployment | 📝 **Documented only** — creating an AWS account requires a payment method, which is not available for this project. Full workflow in [docs/aws-deployment.md](docs/aws-deployment.md) |
+| AWS serverless path (SQS → Lambda → DynamoDB + S3, Terraform) | ✅ **Verified locally via LocalStack** — `terraform plan/apply/destroy` executed, end-to-end event flow + durable idempotency proven by [aws/validate.sh](aws/validate.sh); captured in [docs/evidence.md](docs/evidence.md) §11. **No AWS account exists; nothing was deployed to AWS** — LocalStack emulates the AWS APIs locally and its token is not an AWS credential |
 | CI | **Verified** — pushes and PRs targeting `main` run Maven verification, image builds, and a kind/Strimzi smoke test that deploys Java 25 images and fulfills a real order in-cluster. Current run status is shown by the [Actions page](https://github.com/Mr-Wolv/EventFlow_Bakr101_2026/actions) and the badge above. |
 
 "Documented" is stated as such everywhere it applies; nothing in the docs pretends a
@@ -259,12 +260,18 @@ EventFlow/
 │       ├── OrderStatus.java            # PENDING / FULFILLED
 │       └── OrderCreatedEvent.java      # Consumer-owned event copy
 ├── k8s/                                # namespace, configmap, deployments, services, Strimzi KafkaTopic
+├── aws/                                # AWS path (LocalStack-validated variant) — see aws/README.md
+│   ├── lambda/                         # Java 21 fulfillment Lambda (standalone Maven build, shaded jar)
+│   ├── terraform/                      # S3, DynamoDB, SQS, IAM, Lambda, event-source mapping
+│   └── validate.sh                     # automated integration test: send → assert → duplicate-proof
 ├── docs/
 │   ├── evidence.md                     # Captured transcripts of every demo
 │   ├── distributed-systems.md          # Guarantees and tradeoffs
 │   ├── failure-scenarios.md            # Step-by-step repro commands
 │   ├── kubernetes.md                   # Deploy + scale guide
 │   ├── aws-deployment.md               # EC2 workflow (documented only)
+│   ├── aws-architecture.md             # AWS variant vs Kafka path — guarantees compared
+│   ├── local-aws-validation.md         # LocalStack validation with captured output
 │   └── audit-trail.md                  # Processing contract walkthrough
 └── .github/workflows/ci.yml
 ```
@@ -280,6 +287,7 @@ EventFlow/
 | Orchestration | Kubernetes (Deployments, Services, ConfigMaps, probes) |
 | CI | GitHub Actions |
 | Cloud (documented) | AWS EC2 workflow |
+| AWS path (LocalStack-validated) | Terraform, SQS, Lambda (Java 21), DynamoDB, S3 — validated against LocalStack with `ENFORCE_IAM=1`; no AWS account used |
 
 ## Scope decisions
 

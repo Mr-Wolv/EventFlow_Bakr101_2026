@@ -1,5 +1,13 @@
 # AWS Deployment (Documented Workflow — No Live Deploy)
 
+> **Where to find what:** this page documents the classic **EC2 + Docker Compose**
+> workflow, which remains **documented only** (no AWS account exists). The
+> **serverless AWS path** (SQS → Lambda → DynamoDB + S3 via Terraform) is a separate,
+> **executed** variant of EventFlow — validated locally against LocalStack with
+> captured output; see [aws/README.md](../aws/README.md) and
+> [docs/local-aws-validation.md](local-aws-validation.md). Both pages make the same
+> boundary explicit: nothing in this repository has ever touched real AWS.
+
 > **Honest status:** the AWS portion of this project is **documented, not executed**.
 > Creating an AWS account requires a payment method (credit card) at sign-up, which is
 > not available for this project — so no instance was ever launched, and nothing here

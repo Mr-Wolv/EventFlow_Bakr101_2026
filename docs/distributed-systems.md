@@ -101,6 +101,14 @@ waits on the consumer, and the consumer's failures never fail the write path.
 Records are keyed by `orderId`, so Kafka guarantees per-order ordering within a
 partition. Cross-order ordering is not guaranteed — and is not needed.
 
+## The AWS variant of this system
+
+The same domain flow also exists as a serverless AWS path (SQS → Lambda → DynamoDB +
+S3, Terraform-managed, validated against LocalStack). Its idempotency is durable by
+construction — the conditional put replaces this path's process-local set — while its
+ordering is weaker (no per-key order on a standard queue). The full guarantee
+comparison is in [aws-architecture.md](aws-architecture.md).
+
 ## References
 
 - Kafka design overview: https://kafka.apache.org/documentation/#design

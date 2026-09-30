@@ -378,3 +378,27 @@ referenced from this section):
 | Diagram caption vs diagram contents | Caption said "current Java 25 topology" while the diagram shows Java 21-era versions; regeneration verified byte-identical (280696 bytes, 0 diff) | ✗ fixed — caption now labels the versions honestly |
 | §9 evidence vs surefire `argLine` | §9's fix blocked JaCoCo's agent injection; coverage could not reproduce until `@{argLine}` late-binding was restored | ✗ fixed — root `pom.xml` uses `<argLine>` property + `@{argLine}` |
 | README status-table wording for fault scenarios (§§2–5) | §8/§9 are Java 25 runs while §§2–5 transcripts are Java 21; the table's "Historically verified" label could read as stale/underclaimed | ✗ fixed — row now states exactly which runtime each evidence set covers |
+
+## 11. AWS path — LocalStack validation transcript (2026-09-30)
+
+The AWS deployment path (new in this commit) was provisioned and validated live against
+LocalStack Pro (token-authenticated Hobby plan; the token is a workspace license, not an
+AWS credential). **No AWS account exists; nothing was deployed to AWS.** Toolchain:
+Terraform 1.9.8, aws-cli 1.46 + awscli-local, LocalStack `localstack-pro:latest` with
+`ENFORCE_IAM=1` and `LAMBDA_EXECUTOR=docker` (socket mounted).
+
+| Check | Command | Result |
+|---|---|---|
+| Lambda build (Java 21 target, shaded jar) | `mvn -B -f aws/lambda/pom.xml clean package` | BUILD SUCCESS, ~20 MB jar |
+| Terraform plan | `terraform plan` in `aws/terraform` | 7 to add (S3, DynamoDB + GSI, SQS, IAM role + policy, Lambda, event-source mapping) |
+| Terraform apply | `terraform apply -auto-approve` | `Apply complete! Resources: 7 added, 0 changed, 0 destroyed.` (IAM evaluated for real under ENFORCE_IAM) |
+| End-to-end flow | `bash aws/validate.sh` | SQS → Lambda → DynamoDB item (`status FULFILLED_BY_LAMBDA`, amount 125.5) + S3 archive object → ALL CHECKS PASSED |
+| Durable idempotency | `FLAG_DUPLICATE=1 bash aws/validate.sh` (same eventId re-sent) | DynamoDB item count unchanged — conditional put (`attribute_not_exists(eventId)`) suppressed the redelivery durably, unlike the Kafka path's process-local set |
+| Targeted replace | `terraform apply -replace=aws_lambda_function...` during debugging | clean destroy/create of the single resource |
+| Destroy | `terraform destroy -auto-approve` (first, socket-less attempt) | `Destroy complete! Resources: 6 destroyed.` |
+
+Gotchas hit and documented in [docs/local-aws-validation.md](local-aws-validation.md):
+Docker metadata store went read-only when the C: drive filled (freed space, restarted
+Docker); Lambdas need the host Docker socket mounted (`Docker not available` otherwise);
+a shaded jar must be deployed directly (double-zipping yields `ClassNotFoundException`);
+the license requires the current date-versioned image (pinned 4.x tags are rejected).

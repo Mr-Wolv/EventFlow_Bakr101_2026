@@ -23,5 +23,15 @@ Thumbs.db
 # Local tooling
 bin/
 
+# Terraform runtime artifacts (aws/ path)
+**/.terraform/
+*.tfstate
+*.tfstate.backup
+aws/terraform/tfplan
+aws/terraform/.terraform-build/
+
+# Local diagnostics
+diag-*.json
+
 # Agent workspace state
 .freebuff/

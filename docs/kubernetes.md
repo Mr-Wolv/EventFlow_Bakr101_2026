@@ -3,7 +3,8 @@
 > **Historical verification:** this flow (Minikube v1.39.0 + Strimzi single-node Kafka
 > + these manifests, including scale-up, pod-kill failover and consumer-group rebalance)
 > was executed with Java 21 on 2026-09-29 — captured in [evidence.md](evidence.md) §6.
-> The Java 25 deployment has not been rerun because no Kubernetes cluster is available.
+> On Java 25, CI deploys the same manifests to a kind cluster with Strimzi Kafka and
+> verifies an in-cluster order → FULFILLED smoke test on every push to main (§9).
 
 ## Prerequisites
 

@@ -24,9 +24,9 @@ This project makes a point of not claiming anything it cannot show. The honest s
 | Build + 45 unit tests | ✅ **Verified** — Java 25 `mvn -B verify`; [docs/evidence.md](docs/evidence.md) preserves the earlier Java 21 / 19-test transcript |
 | Docker Compose stack (Kafka 4.0 KRaft + topic init + both services) | ✅ **Java 25 smoke-tested** — all containers healthy; order reached `FULFILLED`; both APIs returned `415` for unsupported media types. Details in [docs/evidence.md](docs/evidence.md) §8 |
 | Duplicate delivery, consumer downtime, retry + recovery, dead-letter topic | 🕰 **Historically verified** — Java 21 transcripts in [docs/evidence.md](docs/evidence.md) §§2–5; these fault scenarios were not rerun after the Java 25 upgrade |
-| Kubernetes on minikube + Strimzi Kafka | 🕰 **Historically verified** — deployed on 2026-09-29 using Java 21, Minikube v1.39.0, and in-cluster Strimzi Kafka; Java 25 redeployment was not run because no Kubernetes cluster is available here. Transcripts: [docs/evidence.md](docs/evidence.md) §6 |
+| Kubernetes on minikube + Strimzi Kafka | ✅ **Verified — Java 21 live run + Java 25 CI kind job** — deployed on 2026-09-29 (Minikube v1.39.0, in-cluster Strimzi Kafka) with scale-up, pod-kill failover and rebalance; on Java 25, CI deploys to kind and runs an in-cluster smoke test on every push. Transcripts: [docs/evidence.md](docs/evidence.md) §6, §9 |
 | AWS EC2 deployment | 📝 **Documented only** — creating an AWS account requires a payment method, which is not available for this project. Full workflow in [docs/aws-deployment.md](docs/aws-deployment.md) |
-| CI | **Configured** — pushes and pull requests targeting `main` run Maven verification, image builds, and a kind/Strimzi smoke test. Current run status is shown by the [Actions page](https://github.com/Mr-Wolv/EventFlow_Bakr101_2026/actions). |
+| CI | **Verified** — pushes and PRs targeting `main` run Maven verification, image builds, and a kind/Strimzi smoke test that deploys Java 25 images and fulfills a real order in-cluster. Current run status is shown by the [Actions page](https://github.com/Mr-Wolv/EventFlow_Bakr101_2026/actions) and the badge above. |
 
 "Documented" is stated as such everywhere it applies; nothing in the docs pretends a
 cloud resource was provisioned.
@@ -184,8 +184,8 @@ Manifests live in [`k8s/`](k8s/) — Namespace, ConfigMap, two Deployments (read
 liveness probes, resource requests/limits), two ClusterIP Services, and the Strimzi
 `KafkaTopic` CR for the `orders` topic. Fulfillment runs **2 replicas**; with the demo's
 single partition, only one replica consumes at a time. This setup was deployed and
-verified on Minikube with Java 21 on 2026-09-29; a Java 25 Kubernetes redeployment has
-not been run. Historical transcripts are in [docs/evidence.md](docs/evidence.md) §6.
+verified on Minikube with Java 21 on 2026-09-29, and CI runs the same manifests on
+kind with Java 25 on every push (§9); transcripts in [docs/evidence.md](docs/evidence.md) §6.
 
 ```bash
 kubectl apply -f k8s/namespace.yaml   # first — see note in docs/kubernetes.md

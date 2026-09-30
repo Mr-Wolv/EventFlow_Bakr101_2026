@@ -333,3 +333,23 @@ transcripts above.
 | Unsupported media type | Both `POST /orders` and `POST /__admin/failure` returned `415` |
 | Actuator health | Both services returned `UP` |
 | JaCoCo 0.8.15 line coverage | 95.49% combined (order-service 95.88%, fulfillment-service 95.24%) |
+
+## 9. CI Kubernetes job — first-request race and fix (2026-09-30)
+
+The Java 25 upgrade merged through PR #1. Its PR run was green (36719131303, 5m34s),
+but the merge-push run failed (36719852766). Everything except the first HTTP request
+of the smoke test succeeded; transcript of the failure:
+
+| Check | Result |
+|---|---|
+| Build job (`mvn -B verify` — 45 tests — plus `docker compose build`) | ✓ 1m46s |
+| kind job up to rollouts (Strimzi operator Ready, `kafka/my-cluster` Ready, both deployments rolled out) | ✓ |
+| First smoke-test `POST http://order-service:8080/orders` | ✗ curl exit 7 (connection refused) **0.1 s** after `rollout status` returned |
+| Root cause | Service endpoint propagation race in a fresh kind cluster: pods report Ready before endpoints are routable, and the POST was attempted exactly once |
+| Same commit, PR run minutes earlier | ✓ green (36719131303) — timing race, not a code regression |
+| Fix (commit `ab46fc8`) | POST retried up to 12× / 5 s, mirroring the existing FULFILLED-log loop; the job now fails only if order-service is unreachable for a full minute |
+| Re-run (36722682813) | ✓ green — build 1m47s, kind job 3m58s, order created in-cluster → `FULFILLED` |
+
+A side effect worth keeping: these two kind-job runs also verify the Java 25 images
+deployed against in-cluster Strimzi Kafka — the previously unverified Kubernetes
+deployment on the current runtime (see README status table).

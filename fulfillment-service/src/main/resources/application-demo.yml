@@ -1,0 +1,3 @@
+eventflow:
+  admin:
+    enabled: true

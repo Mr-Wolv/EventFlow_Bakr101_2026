@@ -53,7 +53,7 @@ class EventPublisherTest {
     }
 
     private static OrderCreatedEvent event() {
-        return new OrderCreatedEvent(UUID.randomUUID(), "OrderCreated", UUID.randomUUID(),
-                UUID.randomUUID(), new BigDecimal("12.50"), "2026-09-30T00:00:00Z");
+        return new OrderCreatedEvent(UUID.randomUUID(), "OrderCreated", 1, UUID.randomUUID(),
+                        UUID.randomUUID(), new BigDecimal("12.50"), "2026-09-30T00:00:00Z");
     }
 }

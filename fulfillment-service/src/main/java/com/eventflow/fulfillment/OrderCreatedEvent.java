@@ -13,6 +13,7 @@ import java.util.UUID;
 public record OrderCreatedEvent(
         UUID eventId,
         String eventType,
+        int eventVersion,
         UUID orderId,
         UUID customerId,
         BigDecimal amount,

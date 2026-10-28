@@ -51,6 +51,7 @@ Event published to the `orders` topic (keyed by `orderId` for per-order ordering
 {
   "eventId": "c7a8f3b2-...",
   "eventType": "OrderCreated",
+  "eventVersion": 1,
   "orderId": "d4e5f6a7-...",
   "customerId": "550e8400-...",
   "amount": 125.50,
@@ -154,11 +155,11 @@ analysis in [docs/distributed-systems.md](docs/distributed-systems.md).
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/__admin/stats` | Unique events processed, orders fulfilled, injected failures, current fault mode. |
-| GET | `/__admin/orders/{orderId}/status` | `PENDING` or `FULFILLED` for a given order. |
-| POST | `/__admin/failure` | Arm a fault: `{"fault": "NONE" \| "ALWAYS" \| "ONCE_PER_EVENT"}`. |
-| GET | `/__admin/failure` | Show the currently armed fault mode and injected-failure count. |
-| POST | `/__admin/failure/clear` | Reset fault mode to `NONE`. |
+| GET | `/__admin/stats` | Unique events processed, orders fulfilled, injected failures, current fault mode. **Requires `demo` profile (`SPRING_PROFILES_ACTIVE=demo`).** |
+| GET | `/__admin/orders/{orderId}/status` | `PENDING` or `FULFILLED` for a given order. **Requires `demo` profile.** |
+| POST | `/__admin/failure` | Arm a fault: `{"fault": "NONE" \| "ALWAYS" \| "ONCE_PER_EVENT"}`. **Requires `demo` profile.** |
+| GET | `/__admin/failure` | Show the currently armed fault mode and injected-failure count. **Requires `demo` profile.** |
+| POST | `/__admin/failure/clear` | Reset fault mode to `NONE`. **Requires `demo` profile.** |
 | GET | `/actuator/health` | Health. |
 
 **Error semantics (both services):** consistent JSON errors — `400` with a message on
@@ -175,7 +176,7 @@ Content-Type, `500` only for genuine unexpected failures. Verified per-case in
 mvn -B verify
 ```
 
-50 unit tests across the two core modules, including atomic event-ID deduplication under a
+61 unit tests across the two core modules, including atomic event-ID deduplication under a
 16-thread race, duplicate delivery skipping, failure injection with idempotency-record
 rollback, retry recovery, asynchronous publish callbacks, error mapping, and Kafka
 error-handler configuration. The AWS Lambda module adds 12 more (conditional-put
@@ -222,7 +223,7 @@ for this project — no instance was ever launched, and the docs say so explicit
 [.github/workflows/ci.yml](.github/workflows/ci.yml) — jobs on every push (three plus a guard):
 
 1. **Build, test, Docker images** — JDK 25 (Temurin) with Maven caching, `mvn -B verify`
-  (50 unit tests, 100%-line-coverage gate) plus the AWS Lambda module (12 tests, same
+  (61 unit tests, 100%-line-coverage gate) plus the AWS Lambda module (12 tests, same
   1.0 gate), then `docker compose build` for both service images.
 2. **Kubernetes (kind)** — builds the images, boots a kind cluster, deploys the Strimzi
    operator + single-node Kafka, applies [`k8s/`](k8s/), then smoke-tests the real

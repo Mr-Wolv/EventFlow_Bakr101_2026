@@ -70,4 +70,13 @@ class IdempotentConsumerTest {
         assertThat(accepted.get()).isEqualTo(1);
         assertThat(idempotentConsumer.processedCount()).isEqualTo(1);
     }
+
+    @Test
+    @DisplayName("dedup state is process-local: a new instance reprocesses the same eventId")
+    void dedupStateIsProcessLocal() {
+        UUID eventId = UUID.randomUUID();
+
+        assertThat(new IdempotentConsumer().tryProcess(eventId)).isTrue();
+        assertThat(new IdempotentConsumer().tryProcess(eventId)).isTrue();
+    }
 }

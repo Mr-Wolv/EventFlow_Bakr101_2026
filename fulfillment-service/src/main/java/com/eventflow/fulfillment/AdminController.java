@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
@@ -19,6 +20,7 @@ import java.util.UUID;
  * Not exposed outside the cluster (Services are ClusterIP); for the docker compose
  * demo the fault is armed via localhost:8081.
  */
+@ConditionalOnProperty(name = "eventflow.admin.enabled", havingValue = "true", matchIfMissing = false)
 @RestController
 @RequestMapping("/__admin")
 public class AdminController {

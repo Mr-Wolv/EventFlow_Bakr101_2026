@@ -86,6 +86,7 @@ services:
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       KAFKA_TOPIC: ${KAFKA_TOPIC:-orders}
+      SPRING_PROFILES_ACTIVE: demo
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8081/actuator/health || exit 1"]
       interval: 10s

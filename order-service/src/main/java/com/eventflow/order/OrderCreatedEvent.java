@@ -13,15 +13,19 @@ import java.util.UUID;
 public record OrderCreatedEvent(
         UUID eventId,
         String eventType,
+        int eventVersion,
         UUID orderId,
         UUID customerId,
         BigDecimal amount,
         String occurredAt) {
 
+    public static final int CURRENT_VERSION = 1;
+
     public static OrderCreatedEvent forOrder(Order order) {
         return new OrderCreatedEvent(
                 UUID.randomUUID(),
                 "OrderCreated",
+                CURRENT_VERSION,
                 order.getId(),
                 order.getCustomerId(),
                 order.getAmount(),

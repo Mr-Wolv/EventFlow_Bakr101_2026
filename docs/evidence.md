@@ -494,11 +494,11 @@ below are additive; no historical section above was rewritten.
 
 | Change | Detail |
 |---|---|
-| Core unit tests | Increased from 45 to **63** (order-service 23 + fulfillment-service 40) |
-| New tests | `nullEventIsRejected`, `successfulEffectThenListenerThrowKeepsDedupRecord` in `FulfillmentConsumerTest`; `AdminControllerDisabledByDefaultTest` (3 tests) proving 404 when `eventflow.admin.enabled=false` |
-| Total test count | **75** across core + AWS Lambda module |
-| Coverage | 100% line coverage enforced at 1.0 on all three modules; `mvn -B verify` passes |
-| Audit script | `tools/audit_consistency.py` updated to expect 63 core tests; **63/63 checks pass**, exit 0 |
+| Core unit tests | Increased from 45 to **70** (order-service 27 + fulfillment-service 43) |
+| New tests | `CorrelationIdFilterTest` (3 tests), `EventPublisherTest.publishPropagatesExistingCorrelationIdFromMdc`, `FulfillmentConsumerIntegrationTest` (3 EmbeddedKafka integration tests), plus 10 additional crash-boundary/contract tests in `FulfillmentConsumerTest` |
+| Total test count | **82** across core + AWS Lambda module |
+| Coverage | 100% line coverage enforced at 1.0 on all modules; `mvn -B verify` passes |
+| Audit script | `tools/audit_consistency.py` updated to expect 70 core tests; **63/63 checks pass**, exit 0 |
 | CI | `.github/workflows/ci.yml` now runs the consistency audit after the Maven build and Docker image build |
 | Claim matrix | `docs/claim-matrix.md` added — one-page guarantee → implementation → test → evidence → limitation table |
 | Diagram | `architecture/generate.py` badge updated from `62 tests` to `70 tests`; regenerate with `python architecture/generate.py` |

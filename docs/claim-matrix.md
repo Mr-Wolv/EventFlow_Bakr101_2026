@@ -1,7 +1,7 @@
 # Claim Matrix — EventFlow P0 Hardening
 
 Updated: 2026-10-28  
-Commit: `07fe0a8` → current working tree
+Commit: `e52b9ea`
 
 | Guarantee | Implementation location | Automated regression test | Live demonstration / probe | Limitation |
 |---|---|---|---|---|

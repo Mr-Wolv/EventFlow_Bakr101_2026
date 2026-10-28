@@ -501,7 +501,7 @@ below are additive; no historical section above was rewritten.
 | Audit script | `tools/audit_consistency.py` updated to expect 63 core tests; **63/63 checks pass**, exit 0 |
 | CI | `.github/workflows/ci.yml` now runs the consistency audit after the Maven build and Docker image build |
 | Claim matrix | `docs/claim-matrix.md` added — one-page guarantee → implementation → test → evidence → limitation table |
-| Diagram | `architecture/generate.py` badge updated from `62 tests` to `63 tests`; regenerate with `python architecture/generate.py` |
+| Diagram | `architecture/generate.py` badge updated from `62 tests` to `70 tests`; regenerate with `python architecture/generate.py` |
 | README | Test counts updated from 51/61 to **63** core tests; admin endpoints documented as requiring `demo` profile; `eventVersion=1` added to event contract example |
 | Compose | `docker-compose.yml` sets `SPRING_PROFILES_ACTIVE: demo` so the documented demo remains easy to operate |
 | Event contract | `eventVersion=1` added to both `OrderCreatedEvent` records; `FulfillmentConsumer.validate()` rejects `eventVersion ≠ 1` and missing/malformed fields before any state change |

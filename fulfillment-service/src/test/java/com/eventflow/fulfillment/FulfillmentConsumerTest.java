@@ -38,13 +38,17 @@ class FulfillmentConsumerTest {
                 UUID.randomUUID(), new BigDecimal("42.00"), "2026-09-29T10:00:00Z");
     }
 
+    private String correlationId() {
+        return "test-correlation-" + UUID.randomUUID();
+    }
+
     @Test
     @DisplayName("first delivery marks the order fulfilled")
     void firstDeliveryFulfillsOrder() {
         OrderCreatedEvent e = event();
         when(idempotentConsumer.tryProcess(e.eventId())).thenReturn(true);
 
-        consumer.listen(e, "orders", 0, 17L);
+        consumer.listen(e, "orders", 0, 17L, correlationId());
 
         verify(store).markFulfilled(e.orderId());
     }
@@ -55,7 +59,7 @@ class FulfillmentConsumerTest {
         OrderCreatedEvent e = event();
         when(idempotentConsumer.tryProcess(e.eventId())).thenReturn(false);
 
-        consumer.listen(e, "orders", 0, 17L);
+        consumer.listen(e, "orders", 0, 17L, correlationId());
 
         verify(store, never()).markFulfilled(any());
     }
@@ -67,7 +71,7 @@ class FulfillmentConsumerTest {
         when(idempotentConsumer.tryProcess(e.eventId())).thenReturn(true);
         failureInjector.setFault(FailureInjector.FaultType.ALWAYS);
 
-        assertThatThrownBy(() -> consumer.listen(e, "orders", 0, 17L))
+        assertThatThrownBy(() -> consumer.listen(e, "orders", 0, 17L, correlationId()))
                 .isInstanceOf(IllegalStateException.class);
 
         verify(store, never()).markFulfilled(any());
@@ -83,12 +87,12 @@ class FulfillmentConsumerTest {
         failureInjector.setFault(FailureInjector.FaultType.ONCE_PER_EVENT);
 
         // first delivery — fails
-        assertThatThrownBy(() -> consumer.listen(e, "orders", 0, 17L))
+        assertThatThrownBy(() -> consumer.listen(e, "orders", 0, 17L, correlationId()))
                 .isInstanceOf(IllegalStateException.class);
         verify(store, never()).markFulfilled(any());
 
         // redelivery — succeeds
-        consumer.listen(e, "orders", 0, 18L);
+        consumer.listen(e, "orders", 0, 18L, correlationId());
         verify(store).markFulfilled(e.orderId());
         assertThat(failureInjector.injectedFailures()).isEqualTo(1);
     }
@@ -99,7 +103,7 @@ class FulfillmentConsumerTest {
         OrderCreatedEvent e = event();
         when(idempotentConsumer.tryProcess(e.eventId())).thenReturn(true);
 
-        consumer.listen(e, "orders", 0, 17L);
+        consumer.listen(e, "orders", 0, 17L, correlationId());
 
         verify(store).markFulfilled(e.orderId());
         assertThat(failureInjector.injectedFailures()).isZero();
@@ -111,7 +115,7 @@ class FulfillmentConsumerTest {
         OrderCreatedEvent e = event();
         when(idempotentConsumer.tryProcess(e.eventId())).thenReturn(true);
 
-        consumer.listen(e, "orders", 0, 17L);
+        consumer.listen(e, "orders", 0, 17L, correlationId());
 
         verify(idempotentConsumer, never()).forget(e.eventId());
     }
@@ -123,7 +127,7 @@ class FulfillmentConsumerTest {
                 UUID.randomUUID(), "UNKNOWN", 1, UUID.randomUUID(),
                 UUID.randomUUID(), new BigDecimal("1.00"), "2026-09-29T10:00:00Z");
 
-        assertThatThrownBy(() -> consumer.listen(bad, "orders", 0, 17L))
+        assertThatThrownBy(() -> consumer.listen(bad, "orders", 0, 17L, correlationId()))
                 .isInstanceOf(IllegalArgumentException.class);
         verifyNoInteractions(store);
         verify(idempotentConsumer, never()).tryProcess(any());
@@ -136,7 +140,7 @@ class FulfillmentConsumerTest {
                 UUID.randomUUID(), "OrderCreated", 99, UUID.randomUUID(),
                 UUID.randomUUID(), new BigDecimal("1.00"), "2026-09-29T10:00:00Z");
 
-        assertThatThrownBy(() -> consumer.listen(bad, "orders", 0, 17L))
+        assertThatThrownBy(() -> consumer.listen(bad, "orders", 0, 17L, correlationId()))
                 .isInstanceOf(IllegalArgumentException.class);
         verifyNoInteractions(store);
         verify(idempotentConsumer, never()).tryProcess(any());
@@ -148,7 +152,7 @@ class FulfillmentConsumerTest {
         assertThatThrownBy(() -> consumer.listen(
                 new OrderCreatedEvent(null, "OrderCreated", 1, UUID.randomUUID(),
                         UUID.randomUUID(), new BigDecimal("1.00"), "2026-09-29T10:00:00Z"),
-                "orders", 0, 17L))
+                "orders", 0, 17L, correlationId()))
                 .isInstanceOf(IllegalArgumentException.class);
         verifyNoInteractions(store);
         verify(idempotentConsumer, never()).tryProcess(any());
@@ -160,7 +164,7 @@ class FulfillmentConsumerTest {
         assertThatThrownBy(() -> consumer.listen(
                 new OrderCreatedEvent(UUID.randomUUID(), "OrderCreated", 1, UUID.randomUUID(),
                         UUID.randomUUID(), new BigDecimal("0.00"), "2026-09-29T10:00:00Z"),
-                "orders", 0, 17L))
+                "orders", 0, 17L, correlationId()))
                 .isInstanceOf(IllegalArgumentException.class);
         verifyNoInteractions(store);
         verify(idempotentConsumer, never()).tryProcess(any());
@@ -172,7 +176,7 @@ class FulfillmentConsumerTest {
         assertThatThrownBy(() -> consumer.listen(
                 new OrderCreatedEvent(UUID.randomUUID(), "OrderCreated", 1, UUID.randomUUID(),
                         UUID.randomUUID(), new BigDecimal("1.00"), "not-a-date"),
-                "orders", 0, 17L))
+                "orders", 0, 17L, correlationId()))
                 .isInstanceOf(IllegalArgumentException.class);
         verifyNoInteractions(store);
         verify(idempotentConsumer, never()).tryProcess(any());
@@ -185,7 +189,7 @@ class FulfillmentConsumerTest {
                 null, "OrderCreated", 1, java.util.UUID.randomUUID(),
                 java.util.UUID.randomUUID(), new java.math.BigDecimal("1.00"), "2026-09-29T10:00:00Z");
 
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> consumer.listen(bad, "orders", 0, 17L))
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> consumer.listen(bad, "orders", 0, 17L, correlationId()))
                 .isInstanceOf(IllegalArgumentException.class);
         org.mockito.Mockito.verifyNoInteractions(store);
     }
@@ -193,7 +197,7 @@ class FulfillmentConsumerTest {
     @Test
     @DisplayName("null event is rejected before any state change")
     void nullEventIsRejected() {
-        assertThatThrownBy(() -> consumer.listen(null, "orders", 0, 17L))
+        assertThatThrownBy(() -> consumer.listen(null, "orders", 0, 17L, correlationId()))
                 .isInstanceOf(IllegalArgumentException.class);
         verifyNoInteractions(store);
         verify(idempotentConsumer, never()).tryProcess(any());
@@ -209,14 +213,14 @@ class FulfillmentConsumerTest {
         assertThatThrownBy(() -> {
             doThrow(new IllegalStateException("post-effect crash"))
                     .when(store).markFulfilled(e.orderId());
-            consumer.listen(e, "orders", 0, 17L);
+            consumer.listen(e, "orders", 0, 17L, correlationId());
         }).isInstanceOf(IllegalStateException.class);
 
         verify(store).markFulfilled(e.orderId());
         verify(idempotentConsumer, never()).forget(e.eventId());
 
         // redelivery: dedup suppresses the duplicate effect
-        consumer.listen(e, "orders", 0, 18L);
+        consumer.listen(e, "orders", 0, 18L, correlationId());
         verify(store, org.mockito.Mockito.times(1)).markFulfilled(e.orderId());
     }
 }

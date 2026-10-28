@@ -182,7 +182,7 @@ for p in ["Java 25", "Spring Boot 3.5.16", "Kafka 4.x · KRaft", "Docker", "Kube
     text((px + w / 2, 132), p, 12, "#C6CFDF", anchor="mm")
     px += w + 10
 
-vb = "CI-verified · 63 tests · 100% line coverage — docs/evidence.md"
+vb = "CI-verified · 70 tests · 100% line coverage — docs/evidence.md"
 vw = measure(vb, 12) + 34
 d.rounded_rectangle([_S(1512 - vw), _S(118), _S(1512), _S(146)], radius=14 * SS, outline=GREEN, width=SS)
 d.ellipse([_S(1512 - vw + 14), _S(128), _S(1512 - vw + 20), _S(134)], fill=GREEN)

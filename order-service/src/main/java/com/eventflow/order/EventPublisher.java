@@ -2,9 +2,14 @@ package com.eventflow.order;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.KafkaHeaders;
+import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.stereotype.Component;
+
+import java.util.UUID;
 
 /**
  * Publishes OrderCreated events to the orders topic.
@@ -29,17 +34,29 @@ public class EventPublisher {
     }
 
     public void publish(OrderCreatedEvent event) {
-        kafkaTemplate.send(topic, event.orderId().toString(), event)
-                .whenComplete((result, ex) -> {
-                    if (ex != null) {
-                        log.error("[PUBLISH-FAILED] event {} for order {}: {}",
-                                event.eventId(), event.orderId(), ex.getMessage());
-                    } else {
-                        log.info("[PUBLISHED] event {} for order {} -> {}-p{}@{}",
-                                event.eventId(), event.orderId(), topic,
-                                result.getRecordMetadata().partition(),
-                                result.getRecordMetadata().offset());
-                    }
-                });
+        final String correlationId;
+        String cid = MDC.get(CorrelationIdFilter.CORRELATION_ID_KEY);
+        if (cid == null) {
+            cid = UUID.randomUUID().toString();
+        }
+        correlationId = cid;
+
+        kafkaTemplate.send(
+                MessageBuilder.withPayload(event)
+                        .setHeader(KafkaHeaders.TOPIC, topic)
+                        .setHeader(KafkaHeaders.KEY, event.orderId().toString())
+                        .setHeader("correlationId", correlationId)
+                        .build()
+        ).whenComplete((result, ex) -> {
+            if (ex != null) {
+                log.error("[PUBLISH-FAILED] event {} for order {}: {} [correlationId={}]",
+                        event.eventId(), event.orderId(), ex.getMessage(), correlationId);
+            } else {
+                log.info("[PUBLISHED] event {} for order {} -> {}-p{}@{} [correlationId={}]",
+                        event.eventId(), event.orderId(), topic,
+                        result.getRecordMetadata().partition(),
+                        result.getRecordMetadata().offset(), correlationId);
+            }
+        });
     }
 }

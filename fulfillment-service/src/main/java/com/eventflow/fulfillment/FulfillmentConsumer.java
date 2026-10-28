@@ -42,14 +42,15 @@ public class FulfillmentConsumer {
     public void listen(OrderCreatedEvent event,
                        @Header(KafkaHeaders.RECEIVED_TOPIC) String topic,
                        @Header(KafkaHeaders.RECEIVED_PARTITION) Integer partition,
-                       @Header(KafkaHeaders.OFFSET) Long offset) {
+                       @Header(KafkaHeaders.OFFSET) Long offset,
+                       @Header(name = "correlationId", required = false) String correlationId) {
         validate(event);
 
         UUID eventId = event.eventId();
 
         if (!idempotentConsumer.tryProcess(eventId)) {
-            log.info("[DUPLICATE] event {} for order {} — skipping ({} {}@{})",
-                    eventId, event.orderId(), topic, partition, offset);
+            log.info("[DUPLICATE] event {} for order {} — skipping ({} {}@{}) [correlationId={}]",
+                    eventId, event.orderId(), topic, partition, offset, correlationId);
             return;
         }
 
@@ -61,11 +62,11 @@ public class FulfillmentConsumer {
             throw fault;
         }
 
-        log.info("[PROCESSING] event {} order {} amount {} (from {} {}@{})",
-                eventId, event.orderId(), event.amount(), topic, partition, offset);
+        log.info("[PROCESSING] event {} order {} amount {} (from {} {}@{}) [correlationId={}]",
+                eventId, event.orderId(), event.amount(), topic, partition, offset, correlationId);
         store.markFulfilled(event.orderId());
-        log.info("[FULFILLED] event {} order {} ({} {}@{})",
-                eventId, event.orderId(), topic, partition, offset);
+        log.info("[FULFILLED] event {} order {} ({} {}@{}) [correlationId={}]",
+                eventId, event.orderId(), topic, partition, offset, correlationId);
     }
 
     private void validate(OrderCreatedEvent event) {

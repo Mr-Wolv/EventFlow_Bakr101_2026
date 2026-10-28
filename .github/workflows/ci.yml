@@ -218,3 +218,36 @@ jobs:
         run: |
           docker logs localstack-main | tail -50 || true
           awslocal lambda get-function --function-name eventflow-order-fulfillment || true
+
+  nightly-verify:
+    name: Nightly verification (mvn verify + audit + diagram check)
+    runs-on: ubuntu-latest
+    schedule:
+      - cron: '0 0 * * *'  # daily at 00:00 UTC
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build and test (multi-module Maven build)
+        run: mvn -B verify
+
+      - name: Build and test the AWS Lambda module (coverage-gated)
+        run: mvn -B -f aws/lambda/pom.xml verify
+
+      - name: Documentation/code consistency audit
+        run: python tools/audit_consistency.py
+
+      - name: Verify architecture diagram is up-to-date
+        run: |
+          python architecture/generate.py
+          git diff --exit-code -- architecture/architecture.png || {
+            echo "Architecture diagram is out of date — regenerate with 'python architecture/generate.py'"
+            exit 1
+          }

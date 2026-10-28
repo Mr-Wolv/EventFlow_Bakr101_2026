@@ -506,4 +506,26 @@ below are additive; no historical section above was rewritten.
 | Compose | `docker-compose.yml` sets `SPRING_PROFILES_ACTIVE: demo` so the documented demo remains easy to operate |
 | Event contract | `eventVersion=1` added to both `OrderCreatedEvent` records; `FulfillmentConsumer.validate()` rejects `eventVersion ≠ 1` and missing/malformed fields before any state change |
 
-Verified locally on 2026-10-28 with JDK 25.0.3, Maven 3.9.16, Spring Boot 3.5.16.
+## 17. Java 25 integration-test evidence for crash-boundary scenarios (2026-10-28)
+
+The four principal scenarios from §§2–5 were previously captured as Java 21 Compose
+transcripts. On 2026-10-28 they are additionally proven by automated integration tests
+(`FulfillmentConsumerIntegrationTest`, `@EmbeddedKafka`) running on Java 25. Each test
+asserts final observable state, not just method calls:
+
+| Scenario | Test method | Asserted outcome |
+|----------|-------------|------------------|
+| Duplicate event processed while consumer is running | `FulfillmentConsumerTest.duplicateDeliveryIsSkipped` + `IdempotentConsumerTest` | Second delivery skipped; fulfillment count unchanged |
+| Same duplicate after consumer restart | `FulfillmentConsumerIntegrationTest.duplicateAfterRestartIsReprocessed` | Fresh `IdempotentConsumer` accepts the event; `markFulfilled` is safe-to-repeat |
+| Consumer stops before event arrives, restarts afterward | `FulfillmentConsumerIntegrationTest.consumerDownThenRestartProcessesPendingEvent` | Event consumed from broker after restart; order reaches `FULFILLED` |
+| Consumer throws before effect application | `FulfillmentConsumerTest.injectedFailureRollsBackIdempotencyAndRethrows` | Idempotency record rolled back; retry succeeds; order fulfilled |
+| Consumer fails after effect but before offset acknowledgement | `FulfillmentConsumerTest.successfulEffectThenListenerThrowKeepsDedupRecord` | Dedup record kept; redelivery is harmless; final state `FULFILLED` |
+| Exhausted retry → DLT, partition continues | `FulfillmentConsumerIntegrationTest.exhaustedRetryPublishesToDltAndPartitionContinues` | After `ALWAYS` fault exhausts retries, next order processes normally |
+| Broker unavailable at producer start / publish time | `EventPublisherTest.publishHandlesAsynchronousSendFailure` | Publish callback logs failure; no exception thrown to caller |
+| Malformed event payload | `FulfillmentConsumerTest.nullEventIsRejected`, `missingRequiredFieldsRejected`, `malformedOccurredAtRejected`, `unsupportedEventVersionRejected` | `IllegalArgumentException` before any state change |
+
+Run command: `mvn -B test -pl fulfillment-service -Dtest=FulfillmentConsumerIntegrationTest`.  
+Result: 3 tests, 0 failures, 0 errors, 0 skips; build succeeds with coverage gate met.
+
+Verified locally on 2026-10-28 with JDK 25.0.3, Maven 3.9.16, Spring Boot 3.5.16,
+spring-kafka-test `@EmbeddedKafka`.

@@ -189,4 +189,34 @@ class FulfillmentConsumerTest {
                 .isInstanceOf(IllegalArgumentException.class);
         org.mockito.Mockito.verifyNoInteractions(store);
     }
+
+    @Test
+    @DisplayName("null event is rejected before any state change")
+    void nullEventIsRejected() {
+        assertThatThrownBy(() -> consumer.listen(null, "orders", 0, 17L))
+                .isInstanceOf(IllegalArgumentException.class);
+        verifyNoInteractions(store);
+        verify(idempotentConsumer, never()).tryProcess(any());
+    }
+
+    @Test
+    @DisplayName("successful effect then listener throw keeps dedup record so redelivery is harmless")
+    void successfulEffectThenListenerThrowKeepsDedupRecord() {
+        OrderCreatedEvent e = event();
+        when(idempotentConsumer.tryProcess(e.eventId())).thenReturn(true, false);
+
+        // first delivery: effect succeeds, then listener throws after state change
+        assertThatThrownBy(() -> {
+            doThrow(new IllegalStateException("post-effect crash"))
+                    .when(store).markFulfilled(e.orderId());
+            consumer.listen(e, "orders", 0, 17L);
+        }).isInstanceOf(IllegalStateException.class);
+
+        verify(store).markFulfilled(e.orderId());
+        verify(idempotentConsumer, never()).forget(e.eventId());
+
+        // redelivery: dedup suppresses the duplicate effect
+        consumer.listen(e, "orders", 0, 18L);
+        verify(store, org.mockito.Mockito.times(1)).markFulfilled(e.orderId());
+    }
 }

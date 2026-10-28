@@ -486,3 +486,24 @@ The checker's own calibration history is part of the record: every initial MISMA
 was individually traced to a matcher defect (not a repo defect) and fixed in the
 engine before the 63/63 verdict was accepted — the audit tool held itself to the
 same standard as the repo.
+
+## 16. Current validation update (2026-10-28)
+
+Commit `07fe0a8` brought the repo to its current P0-hardened state. The changes
+below are additive; no historical section above was rewritten.
+
+| Change | Detail |
+|---|---|
+| Core unit tests | Increased from 45 to **63** (order-service 23 + fulfillment-service 40) |
+| New tests | `nullEventIsRejected`, `successfulEffectThenListenerThrowKeepsDedupRecord` in `FulfillmentConsumerTest`; `AdminControllerDisabledByDefaultTest` (3 tests) proving 404 when `eventflow.admin.enabled=false` |
+| Total test count | **75** across core + AWS Lambda module |
+| Coverage | 100% line coverage enforced at 1.0 on all three modules; `mvn -B verify` passes |
+| Audit script | `tools/audit_consistency.py` updated to expect 63 core tests; **63/63 checks pass**, exit 0 |
+| CI | `.github/workflows/ci.yml` now runs the consistency audit after the Maven build and Docker image build |
+| Claim matrix | `docs/claim-matrix.md` added — one-page guarantee → implementation → test → evidence → limitation table |
+| Diagram | `architecture/generate.py` badge updated from `62 tests` to `63 tests`; regenerate with `python architecture/generate.py` |
+| README | Test counts updated from 51/61 to **63** core tests; admin endpoints documented as requiring `demo` profile; `eventVersion=1` added to event contract example |
+| Compose | `docker-compose.yml` sets `SPRING_PROFILES_ACTIVE: demo` so the documented demo remains easy to operate |
+| Event contract | `eventVersion=1` added to both `OrderCreatedEvent` records; `FulfillmentConsumer.validate()` rejects `eventVersion ≠ 1` and missing/malformed fields before any state change |
+
+Verified locally on 2026-10-28 with JDK 25.0.3, Maven 3.9.16, Spring Boot 3.5.16.

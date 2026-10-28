@@ -131,7 +131,7 @@ check("token-not-credential boundary", all("not an AWS credential" in norm(d) fo
 check("terraform apply/destroy in CI", "terraform apply" in ci and "terraform destroy" in ci)
 
 # ============ test/CI counts ============
-check("README 61+12=73", "61 unit tests" in readme and "12 more" in readme or "(12 tests" in readme)
+check("README 63+12=75", "63 unit tests" in readme and "12 more" in readme or "(12 tests" in readme)
 check("evidence 0-missed claim", "0 missed lines" in evid and "100.00%" in evid)
 check("CI kind smoke polls", "seq 1 12" in ci and "sleep 5" in ci)
 check("CI creates namespace first", "kubectl apply -f k8s/namespace.yaml" in ci)

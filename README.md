@@ -176,7 +176,7 @@ Content-Type, `500` only for genuine unexpected failures. Verified per-case in
 mvn -B verify
 ```
 
-61 unit tests across the two core modules, including atomic event-ID deduplication under a
+63 unit tests across the two core modules, including atomic event-ID deduplication under a
 16-thread race, duplicate delivery skipping, failure injection with idempotency-record
 rollback, retry recovery, asynchronous publish callbacks, error mapping, and Kafka
 error-handler configuration. The AWS Lambda module adds 12 more (conditional-put
@@ -223,7 +223,7 @@ for this project — no instance was ever launched, and the docs say so explicit
 [.github/workflows/ci.yml](.github/workflows/ci.yml) — jobs on every push (three plus a guard):
 
 1. **Build, test, Docker images** — JDK 25 (Temurin) with Maven caching, `mvn -B verify`
-  (61 unit tests, 100%-line-coverage gate) plus the AWS Lambda module (12 tests, same
+  (63 unit tests, 100%-line-coverage gate) plus the AWS Lambda module (12 tests, same
   1.0 gate), then `docker compose build` for both service images.
 2. **Kubernetes (kind)** — builds the images, boots a kind cluster, deploys the Strimzi
    operator + single-node Kafka, applies [`k8s/`](k8s/), then smoke-tests the real

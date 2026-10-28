@@ -235,6 +235,9 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
+      - name: Install Python dependencies
+        run: pip install --quiet pillow
+
       - name: Build and test (multi-module Maven build)
         run: mvn -B verify
 

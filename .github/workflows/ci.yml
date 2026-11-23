@@ -84,6 +84,7 @@ jobs:
         run: |
           kubectl create namespace kafka
           kubectl create -f 'https://strimzi.io/install/latest?namespace=kafka' -n kafka
+          kubectl -n kafka rollout status deployment/strimzi-cluster-operator --timeout=300s
           kubectl wait pod -l name=strimzi-cluster-operator --for=condition=Ready --timeout=300s -n kafka
 
       - name: Deploy Kafka (Strimzi single-node example) and the orders topic
